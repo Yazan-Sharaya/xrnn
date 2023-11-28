@@ -40,11 +40,11 @@ setup(
     author="Yazan Sharaya",  # This is done in one line in `pyproject.toml`: authors = [{name = "", email = ""}]
     author_email="yazan.sharaya.yes@gmail.com",
     description="Light weight fast machine learning framework.",
-    long_description=long_description,  # These two lines are equivalent to: readme = "README.md" in pyproject.toml
+    long_description=long_description,  # These two lines are equivalent to: readme = "README.md" in `pyproject.toml`.
     long_description_content_type="text/markdown",
     license="LICENSE",
     python_requires=">=3.6",
-    dependencies=[
+    install_requires=[  # Same as dependencies in `pyproject.toml`.
         "numpy>=1.17",
         "typing-extensions; python_version<'3.8'",
     ],
