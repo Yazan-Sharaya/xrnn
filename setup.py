@@ -81,9 +81,9 @@ setup(
         ]
     },
 
-    # project_urls={  # Same as [project.urls]; repository = "" in `pyproject.toml`.
-    #     "repository": "https://github.com/",
-    # },
+    project_urls={  # Same as [project.urls]; repository = "" in `pyproject.toml`.
+        "repository": "https://github.com/Yazan-Sharaya/xrnn",
+    },
 
     packages=["xrnn"],  # Same as [tool.setuptools]; packages = ["xrnn"] in `pyproject.toml`.
 

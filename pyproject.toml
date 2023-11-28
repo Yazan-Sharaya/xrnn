@@ -48,8 +48,8 @@ dev = [
     "build"
 ]
 
-#[project.urls]
-#repository = "https://github.com/"
+[project.urls]
+repository = "https://github.com/Yazan-Sharaya/xrnn"
 
 [tool.setuptools]
 packages = ["xrnn"]
