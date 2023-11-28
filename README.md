@@ -1,8 +1,5 @@
 EXtremely Rapid Neural Networks (xrnn)
 ======================================
-------
-[//]: # (The line separator "---" isn't needed for GitHub to render a line separator because it implicitly adds a line
-separator after headings. However, I included it because explicit is better than implicit)
 Is a Python machine learning framework for building layers and neural networks
 by exposing an easy-to-use interface for building neural networks as a series of layers, similar to
 [Keras](https://keras.io/getting_started/), while being as lightweight, fast, compatible and extendable as possible.
@@ -10,7 +7,6 @@ by exposing an easy-to-use interface for building neural networks as a series of
 
 Table of Contents
 -----------------
-------
 * [The advantages of this package over existing machine learning frameworks](#the-advantages-of-this-package-over-existing-machine-learning-frameworks)
 * [Installation](#installation)
 * [Examples](#examples)
@@ -24,7 +20,6 @@ Table of Contents
 
 The advantages of this package over existing machine learning frameworks
 ------------------------------------------------------------------------
-------
 1. Works on any Python version 3.6 _(released in 2016)_ and above.
 2. Requires only one dependency, which is Numpy _(you most likely already have it)_.
 3. Lightweight in terms of size.
@@ -37,7 +32,6 @@ The advantages of this package over existing machine learning frameworks
 
 Installation
 ------------
-------
 Simply run the following command:\
 `pip install xrnn`
 
@@ -49,7 +43,6 @@ see [Building From Source](#building-from-source).
 
 Examples
 --------
-------
 This example will show how to build a CNN for classification, add layers to it, train it on dummy data, validate it and
 use it for inference.
 ```python
@@ -97,7 +90,6 @@ actual data and see how the magic happens!
 
 Features
 --------
-------
 - `xrnn.layers`: Implements Conv2D, Dropout, Dense, Max/AvgPool2D, Flatten and BatchNormalization layers.
 - `xrnn.optimizers`: Implements Adam, SGD (with momentum support), RMSprop and Adagrad optimizers.
 - `xrnn.losees`: Implements BinaryCrossentropy, CategoricalCrossentropy and MeanSquaredError (MSE) loss functions.
@@ -112,7 +104,6 @@ the same interface as Keras, the only notable difference is that keras `model.fi
 
 Performance Note
 ----------------
-------
 For optimal performance, this package prefers [Intel optimized numpy](https://pypi.org/project/intel-numpy/) which yields an average of 35% higher performance
 (less execution time) when running the example network/dataset in the [Example Section](#examples).
 If Intel optimized numpy isn't present, it'll use vanilla numpy, this doesn't affect model/layers performance in terms of loss or accuracy at all, it just affects the execution speed.\
@@ -135,7 +126,6 @@ just use the default numpy (`pip install numpy`) and save yourself a headache.
 
 Building From Source
 --------------------
-------
 If you want to use the package on platform that doesn't have a pre-built wheel (which is only available for windows atm) follow these steps:
 
 1. clone the GitHub repository.
@@ -162,7 +152,6 @@ the code for the layers is written in C, so it can be called from Python using c
 
 Current Design Limitations
 --------------------------
-------
 The current design philosophy is compatibility, being able to port/build this package on any OS or hardware, so only
 native Python/C code is used with no dependence on any third party libraries (except for numpy), this is great for
 compatibility but not so for performance, because the usage of optimized libraries like [Eigen](https://eigen.tuxfamily.org/dox/GettingStarted.html),
@@ -172,7 +161,6 @@ is prohibited, which in turn makes this machine learning framework unusable for 
 
 Project Status
 --------------
-------
 This project is completed and currently no hold. I might be picking it up and the future and adding the following features to it:
 - Add Support for Cuda.
 - Optimize CPU performance to match the mature frameworks like Pytorch and Tensorflow.
@@ -184,5 +172,4 @@ While keeping with the core vision of the project, which is to make as easy to i
 
 License
 -------
-------
 This project is licensed under the [MIT license](LICENSE).
