@@ -90,5 +90,5 @@ setup(
     # Include the pre-compiled extension (shared/dynamic library)
     package_data={"xrnn": ["lib/*"]},  # Same as [tool.setuptools.package-data] in `pyproject.toml`.
 
-    # distclass=BinaryDistribution
+    distclass=BinaryDistribution
 )
