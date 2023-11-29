@@ -1,3 +1,5 @@
 /xrnn/lib/
 .idea
 dist
+build
+xrnn.egg-info
