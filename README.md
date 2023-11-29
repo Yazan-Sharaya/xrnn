@@ -35,8 +35,6 @@ Installation
 Simply run the following command:\
 `pip install xrnn`
 
-**Note**: If you want to squeeze as much performance out of this package, follow the steps listed in
-[Performance Note](#performance-note) before running `pip install xrnn`.\
 **Note** that the pre-built wheels are only provided for windows at the moment, if you want to install the package on other platforms
 see [Building From Source](#building-from-source).
 
@@ -100,28 +98,6 @@ Features
 For more information on how to use each feature (like the `Model` class), look at said feature docstring (for example `help(Conv2D.forward)`).
 Nonetheless, if you are acquainted with Keras, it's pretty easy to get started with this package because it has _almost_
 the same interface as Keras, the only notable difference is that keras `model.fit` is equivalent to `model.train` in this package.
-
-
-Performance Note
-----------------
-For optimal performance, this package prefers [Intel optimized numpy](https://pypi.org/project/intel-numpy/) which yields an average of 35% higher performance
-(less execution time) when running the example network/dataset in the [Example Section](#examples).
-If Intel optimized numpy isn't present, it'll use vanilla numpy, this doesn't affect model/layers performance in terms of loss or accuracy at all, it just affects the execution speed.\
-If you want to install the optimized numpy package.
-
-for conda, simply run:\
-`conda install numpy --force-reinstall -c default`\
-conda will install the optimized numpy automatically. **Note** that this will also install a handful of packages along with numpy, mainly mkl, which is quite a big package (~60-120 mb).
-
-for pip:\
-`pip uninstall numpy`\
-if you already have numpy installed. then\
-`pip install intel-numpy`
-
-Then continue using numpy as you usually would (`import numpy as np`)
-
-**Note** that if you are having a problem installing intel-numpy via pip, and you have conda, use conda to install it, otherwise
-just use the default numpy (`pip install numpy`) and save yourself a headache.
 
 
 Building From Source
