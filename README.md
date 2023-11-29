@@ -32,7 +32,9 @@ The advantages of this package over existing machine learning frameworks
 Installation
 ------------
 Simply run the following command:\
-`pip install xrnn`
+```
+pip install xrnn
+```
 
 **Note** that the pre-built wheels are only provided for windows at the moment, if you want to install the package on other platforms
 see [Building From Source](#building-from-source).
@@ -107,7 +109,10 @@ If you want to use the package on platform that doesn't have a pre-built wheel (
 2. navigate to the source tree where the .py and .cpp files reside.
 3. Open the terminal.
 4. Create a new folder called _lib_.
-5. Compile the source files via `g++ -shared -o lib/c_layers layers_f.cpp layers_d.cpp -Ofast -fopenmp -fPIC`
+5. Compile the source files via
+```
+g++ -shared -o lib/c_layers layers_f.cpp layers_d.cpp -Ofast -fopenmp -fPIC
+```
 6. Navigate pack to the main directory (where pyproject.toml and setup.py reside).
 7. Run `python -m build -w`. If you don't have `build` installed, run `pip install build` before running the previous command.
 8. Run `pip install dist/THE_WHEEL_NAME.whl`
