@@ -11,7 +11,6 @@ Table of Contents
 * [Installation](#installation)
 * [Examples](#examples)
 * [Features](#features)
-* [Performance Note](#performance-note)
 * [Building from Source](#building-from-source)
 * [Current Design Limitations](#current-design-limitations)
 * [Project Status](#project-status)
