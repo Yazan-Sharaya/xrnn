@@ -36,7 +36,7 @@ class BinaryDistribution(Distribution):
 
 setup(
     name="xrnn",
-    version="1.0.0",
+    version="1.0.1",
     author="Yazan Sharaya",  # This is done in one line in `pyproject.toml`: authors = [{name = "", email = ""}]
     author_email="yazan.sharaya.yes@gmail.com",
     description="Light weight fast machine learning framework.",
