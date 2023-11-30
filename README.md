@@ -31,7 +31,7 @@ The advantages of this package over existing machine learning frameworks
 
 Installation
 ------------
-Simply run the following command:\
+Simply run the following command:
 ```
 pip install xrnn
 ```
