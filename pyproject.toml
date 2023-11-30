@@ -49,7 +49,7 @@ dev = [
 ]
 
 [project.urls]
-repository = "https://github.com/Yazan-Sharaya/xrnn"
+Repository = "https://github.com/Yazan-Sharaya/xrnn"
 
 [tool.setuptools]
 license-files = ["LICENSE"]

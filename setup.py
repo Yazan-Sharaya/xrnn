@@ -82,7 +82,7 @@ setup(
     },
 
     project_urls={  # Same as [project.urls]; repository = "" in `pyproject.toml`.
-        "repository": "https://github.com/Yazan-Sharaya/xrnn",
+        "Repository": "https://github.com/Yazan-Sharaya/xrnn",
     },
 
     licens_files=("LICENSE", ),  # Same as [tool.setuptools]; license-files = ["LICENSE"] in `pyproject.toml`.
