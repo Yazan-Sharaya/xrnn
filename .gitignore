@@ -1,4 +1,5 @@
 /xrnn/lib/
+/xrnn/__pycache__
 .idea
 dist
 build
