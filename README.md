@@ -152,4 +152,4 @@ While keeping with the core vision of the project, which is to make as easy to i
 
 License
 -------
-This project is licensed under the [MIT license](LICENSE).
+This project is licensed under the [MIT license](https://github.com/Yazan-Sharaya/xrnn/blob/main/LICENSE).
