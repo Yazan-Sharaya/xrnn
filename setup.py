@@ -42,7 +42,7 @@ setup(
     description="Light weight fast machine learning framework.",
     long_description=long_description,  # These two lines are equivalent to: readme = "README.md" in `pyproject.toml`.
     long_description_content_type="text/markdown",
-    license="LICENSE",
+    license="MIT",
     python_requires=">=3.6",
     install_requires=[  # Same as dependencies in `pyproject.toml`.
         "numpy>=1.17",
@@ -85,6 +85,7 @@ setup(
         "repository": "https://github.com/Yazan-Sharaya/xrnn",
     },
 
+    licens_files=("LICENSE", ),  # Same as [tool.setuptools]; license-files = ["LICENSE"] in `pyproject.toml`.
     packages=["xrnn"],  # Same as [tool.setuptools]; packages = ["xrnn"] in `pyproject.toml`.
 
     # Include the pre-compiled extension (shared/dynamic library)
