@@ -1,5 +1,6 @@
 /xrnn/lib/
 /xrnn/__pycache__
+/xrnn/datasets/
 .idea
 dist
 build
