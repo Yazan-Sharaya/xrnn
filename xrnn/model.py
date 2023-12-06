@@ -90,6 +90,8 @@ class Model:
         -----
         That the first value in `input_shape` should be batch size not the number of samples in the dataset.
         """
+        if len(input_shape) in (1, 3):  # For when a sample input shape is provided with no batch size.
+            input_shape = (1, ) + input_shape
         self.batch_size = input_shape[0]
         self.built = True
         self.input_shape = input_shape
@@ -344,27 +346,42 @@ class Model:
         -----
         When batch_size is set to `None`, the whole input `x` is passed at once (default).
         """
-        if len(x.shape) == 1 and isinstance(self.layers[0], layers.Dense):
-            x = ops.expand_dims(x, 0)  # If it's a single sample convert it to a batch of 1
         if not batch_size:
             return self.forward(x, training=False)
         data_batches = [x[i * batch_size: (i + 1) * batch_size] for i in range(len(x) // batch_size + 1 or 1)]
         predictions = []
         for batch in data_batches:
             predictions.append(self.forward(batch, training=False))
-        return ops.vstack(predictions).copy()
+        return ops.vstack(predictions)
 
     predict = inference  # Alias
 
-    def mem_usage(self) -> int:
-        """Returns the total memory used by the model's layers' parameters + gradients + activations. **Note** this is
+    def mem_usage(self, batch_size: int = None) -> int:
+        """
+        Returns the total memory used by the model's layers' parameters + gradients + activations. **Note** this is
         not equivalent to calling `getsizeof` recursively on the model instance because this method doesn't calculate
         the memory used by the Python objects themselves, this is because the size of bare objects is minuscule compared
-        to the arrays holding numbers for the different layers' attributes even for a small network."""
+        to the arrays holding numbers for the different layers' attributes even for a small network.
+
+        Parameters
+        ----------
+        batch_size: int, optional
+            How many samples each slice of the data contain. This number largely determine the memory consumption,
+            because some inputs/outputs of the layer are saved and the more samples a batch has, the more memory is
+            consumed. Defaults to None, which means use the batch size the model was built with/trained on. You can
+            provide any number for this parameter to see how much memory is going to be consumed by the network without
+            actually training it.
+
+        Returns
+        -------
+        tot_mem: int
+            Memory consumed by the model in bytes.
+        """
         if not self.built:
             raise ValueError("The model must be built before calling this method. Please call `model.build()` first.")
+        batch_size = batch_size or self.batch_size  # Give priority to the provided batch_size when picking.
+        input_shape = (batch_size, ) + self.input_shape[1:]
         tot = 0
-        input_shape = self.input_shape
         for layer in self.layers:
             tot += layer_utils.layer_memory_consumption(layer, input_shape, self.optimizer)[-1]
             input_shape = layer.compute_output_shape(input_shape)
@@ -392,11 +409,22 @@ class Model:
           they are going to take.
         * When no optimizer is set for the model, it's assumed that the model is only going to be used for inference
           so no activation/gradients are going to be created thus 0 memory consumption.
+
+        Parameters
+        ----------
+        batch_size: int, optional
+            How many samples each slice of the data contain. This number largely determine the memory consumption,
+            because some inputs/outputs of the layer are saved and the more samples a batch has, the more memory is
+            consumed. Defaults to None, which means use the batch size the model was built with/trained on. You can
+            provide any number for this parameter to see how much memory is going to be consumed by the network without
+            actually training it.
+        memory_consumption: bool, optional
+            Whether to print various memory consumption metrics. Default is True.
          """
         if not self.built:
             raise ValueError(
                 "Please call `model.build()` before calling `summary()` because the model has to be built.")
-        batch_size = self.batch_size or batch_size
+        batch_size = batch_size or self.batch_size  # Give priority to the provided batch_size when picking.
         if batch_size > 1024:
             if not batch_size & (batch_size-1) == 0:  # check if batch size is not a power of 2
                 warnings.warn(
