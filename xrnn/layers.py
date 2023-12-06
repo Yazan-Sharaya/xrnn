@@ -158,6 +158,9 @@ class Layer:
 
     def __call__(self, inputs: ops.ndarray) -> ops.ndarray:
         """This method should be called when passing inputs through the layer."""
+        if inputs.ndim in (1, 3):  # One sample provided, but not with a batch dim, for example on image of shape
+            # (32, 32, 3), so we expand its dimensions to (1, 32, 32, 3).
+            inputs = ops.expand_dims(inputs, 0)
         curr_input_shape = inputs.shape
         if self.built is False:
             self.build(curr_input_shape)
@@ -354,16 +357,15 @@ class Dense(Layer):
         """
         super().__init__(weight_l2, bias_l2, weight_initializer, bias_initializer)
         self.neurons = neurons
-        self.input_dim = input_dim
         self.weight_initializer = weight_initializer
         self.bias_initializer = bias_initializer
 
         self.weights = None
         self.biases = None
         self.built = False
-        if self.input_dim:
+        if input_dim:
             if self.weight_initializer != 'auto':
-                self.build(self.input_dim)
+                self.build(input_dim)
 
     def build(self, input_shape: Union[int, tuple], activation: str = None) -> None:
         input_d = input_shape[-1] if isinstance(input_shape, tuple) else input_shape
@@ -635,6 +637,7 @@ class Pooling2D(SpatialLayer):
     def backward(self, d_values: ops.ndarray) -> ops.ndarray:
         d_inputs = ops.zeros(self.inputs.shape)
         args = (d_values, self.masks, d_inputs) if self.use_max else (d_values, d_inputs)
+        args = self.make_arguments_list(*args)
         if self.dtype == 'float32':
             c_layers.maxPoolBackwardF(*args) if self.use_max else c_layers.avgPoolBackwardF(*args)
         else:
