@@ -12,6 +12,7 @@ Table of Contents
 * [Examples](#examples)
 * [Features](#features)
 * [Building from Source](#building-from-source)
+* [Testing](#testing)
 * [Current Design Limitations](#current-design-limitations)
 * [Project Status](#project-status)
 * [License](#license)
@@ -24,7 +25,7 @@ The advantages of this package over existing machine learning frameworks
 3. Lightweight in terms of size.
 4. Very fast startup time, which is the main version behind developing this project, meaning that importing the package, 
    building a network and straiting training takes less than a second (compared to `Tensorflow` for example which can take more than 10 seconds).
-5. High performance even on weak hardware, reached 72% validation accuracy on MNIST dataset using a CNN on a 2 core 2.7 GHZ cpu (i7-7500U) in 25 seconds.
+5. High performance even on weak hardware, reached 90% validation accuracy on MNIST dataset using a CNN on a 2 core 2.7 GHZ cpu (i7-7500U) in 20 seconds.
 6. Memory efficient, uses less RAM than Tensorflow _(~25% less)_ for a full CNN training/inference pipeline.
 7. Compatibility, there's no OS specific code (OS and hardware independent), so the package can pretty much be built and run on any platform that has python >= 3.6 and any C/C++ compiler that has come out in the last 20 years.
 
@@ -47,13 +48,13 @@ use it for inference.
 ```python
 import numpy as np
 # Create a dummy dataset, which contains 1000 images, where each image is 28 pixels in height and width and has 3 channels.
-number_of_sample = 1000
+number_of_samples = 1000
 height = 28
 width = 28
 channels = 3
 number_of_classes = 9  # How many classes are in the dataset, for e.g. cat, car, dog, etc.
-x_dummy = np.random.random((number_of_sample, height, width, channels))
-y_dummy = np.random.randint(number_of_classes, size=(number_of_sample, ))
+x_dummy = np.random.random((number_of_samples, height, width, channels))
+y_dummy = np.random.randint(number_of_classes, size=(number_of_samples, ))
 
 # Build the network.
 batch_size = 64  # How many samples are in each batch (slice) of the data.
@@ -73,7 +74,7 @@ model.add(MaxPooling2D(2, 2, 'same'))
 model.add(Flatten())
 model.add(Dense(100))
 model.add(ReLU())
-model.add(Dense(9))  # The output layer, has the same number of neurons as the number of unique classes in the dataset.
+model.add(Dense(number_of_classes))  # The output layer, has the same number of neurons as the number of unique classes in the dataset.
 model.add(Softmax())
 
 model.set(Adam(), CategoricalCrossentropy())
@@ -84,7 +85,10 @@ prediction = model.inference(x_dummy_predict)  # Same as model.predict(x_dummy_p
 ```
 And that's it! You've built, trained and validated a convolutional neural network in just a few lines. It's true that the data is random
 therefor the model isn't going to learn, but this demonstrates how to use the package, just replace 'x_dummy' and 'y_dummy' with
-actual data and see how the magic happens!
+actual data and see how the magic happens!\
+A complete example that demonstrate the above with actual data can be found in `example.py` script that is bundled with the package.
+It trains a CNN on [MNIST](https://en.wikipedia.org/wiki/MNIST_database) data set, just import the script using `from xrnn import example` and run `example.mnist_example()`.
+**Note** that the script will download the MNIST dataset _(~12 megabytes)_ and store it locally.
 
 
 Features
@@ -108,17 +112,18 @@ If you want to use the package on platform that doesn't have a pre-built wheel (
 1. clone the GitHub repository.
 2. navigate to the source tree where the .py and .cpp files reside.
 3. Open the terminal.
-4. Create a new folder called _lib_.
+4. Create a new folder called _**lib**_.
 5. Compile the source files via
-```
-g++ -shared -o lib/c_layers layers_f.cpp layers_d.cpp -Ofast -fopenmp -fPIC
-```
+    ```
+    g++ -shared -o lib/c_layers layers_f.cpp layers_d.cpp -Ofast -fopenmp -fPIC
+    ```
 6. Navigate pack to the main directory (where pyproject.toml and setup.py reside).
 7. Run `python -m build -w`. If you don't have `build` installed, run `pip install build` before running the previous command.
-8. Run `pip install dist/THE_WHEEL_NAME.whl`
+8. [Test your installation](#testing).
+9. Run `pip install dist/THE_WHEEL_NAME.whl`
 
 And that's it! You can check the installation by running the following command `pip list` and checking to see of `xrnn` is in there.\
-You can ignore any warnings raised during the build process is long as it's successful.
+You can ignore any warnings raised during the build process is long as it's successful. You can delete the cloned git repository if you wish to.
 
 **A note** for compiling on windows: If you want to compile the package on windows (for some reason since pre-built wheels are already provided)
 and you are using MSVC compiler, the C source files (layer_f and layers_d) must have the .cpp extension, so they are treated as C++ source files
@@ -128,6 +133,16 @@ Anyway **_it's strongly recommended_** to use [TDM-GCC](https://jmeubank.github.
 in a faster executable (~15% faster). So the whole reason for having the files as C++ source files is for compatibility with Microsoft's compiler,
 otherwise they would've been writen directly in C with no support when they are treated as C++ files (preprocessor directives and extern "C") because
 the code for the layers is written in C, so it can be called from Python using ctypes.
+
+
+Testing
+-------
+For testing the package, first you need to download `pytest` if you don't have it via:
+```
+pip install pytest
+```
+Then open the terminal/cmd in the parent directory and just type `pytest` and hit enter.\
+_If you installed `pytest` in a virtual environment, make sure to active it before running the command :)_
 
 
 Current Design Limitations
