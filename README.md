@@ -97,6 +97,7 @@ therefor the model isn't going to learn, but this demonstrates how to use the pa
 actual data and see how the magic happens!\
 A complete example that demonstrate the above with actual data can be found in `example.py` script that is bundled with the package.
 It trains a CNN on [MNIST](https://en.wikipedia.org/wiki/MNIST_database) data set, just import the script using `from xrnn import example` and run `example.mnist_example()`.
+Alternatively, you can run it from the command line using `python -m xrnn.example`\
 **Note** that the script will download the MNIST dataset _(~12 megabytes)_ and store it locally.
 
 
