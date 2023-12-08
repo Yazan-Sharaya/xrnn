@@ -95,7 +95,9 @@ def mnist_example(batch_size: int = 128, epochs: int = 1) -> None:
     model.train(X, y, batch_size=batch_size, epochs=epochs, validation_data=[X_test, y_test])
 
     # Predict the label of the first sample in the test dataset.
-    prediction = model.predict(X_test[0])
+    # np.expand_dims is used here to turn the sample (28, 28, 1) into a batch containing one sample (1, 28, 28, 3)
+    # because the network work in batches even if it's one sample.
+    prediction = model.predict(np.expand_dims(X_test[0], 0))
 
     # Model predicts on batches, so even if one sample is provided, it's turned into a batch of 1, that's why we take
     # the first sample.
