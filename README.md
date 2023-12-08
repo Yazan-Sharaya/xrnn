@@ -82,6 +82,15 @@ model.train(x_dummy, y_dummy, epochs=epochs, batch_size=batch_size, validation_s
 
 x_dummy_predict = np.random.random((batch_size, height, width, channels))
 prediction = model.inference(x_dummy_predict)  # Same as model.predict(x_dummy_predict).
+
+# Model predicts on batches, so even if one sample is provided, it's turned into a batch of 1, that's why we take
+# the first sample.
+prediction = prediction[0]
+
+# The model returns a probability for each label, `np.argmax` returns the index with the largest probability.
+label = np.argmax(prediction)
+
+print(f"Prediction: {label} - Actual: {y_dummy[0]}.")
 ```
 And that's it! You've built, trained and validated a convolutional neural network in just a few lines. It's true that the data is random
 therefor the model isn't going to learn, but this demonstrates how to use the package, just replace 'x_dummy' and 'y_dummy' with
