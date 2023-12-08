@@ -109,7 +109,7 @@ class DataHandler:
         config.CREATED_OBJECTS.append(self)
 
     @property
-    def dtype(self) -> str:
+    def dtype(self) -> Union[config.Literal["float32", "float64"], type]:
         """Returns the data type of the data."""
         return self._dtype
 

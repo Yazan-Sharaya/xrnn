@@ -118,7 +118,7 @@ class Layer:
         self.name = layer_utils.make_unique_name(str(type(self)).split('.')[-1][:-2])
 
     @property
-    def dtype(self) -> str:
+    def dtype(self) -> Union[config.Literal['float32', 'float64'], type]:
         """Returns a string representing the data type of the layer. e.g. 'float32'."""
         return self._dtype
 

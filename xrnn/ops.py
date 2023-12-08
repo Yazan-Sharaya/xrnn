@@ -46,7 +46,7 @@ class _Random(_random.Generator):
     def __init__(self, seed=None):
         super().__init__(_random.PCG64(seed))
 
-    def standard_normal(self, shape: shape_hint = None, dtype: dtype_hint = None, out=None) -> ndarray:
+    def standard_normal(self, shape: shape_hint = None, dtype: dtype_hint = None, out: ndarray = None) -> ndarray:
         if not dtype:
             dtype = config.DTYPE
         return super().standard_normal(shape, dtype, out)
