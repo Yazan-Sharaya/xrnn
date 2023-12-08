@@ -59,7 +59,7 @@ class Layer:
          1. build (method): Method initializing/creating the layer weights and biases. Only needed if the layer has
             weights and/or biases.
          2. built (attribute): Set to False upon layer creation. Only needed if the layer can be built, meaning it has
-            weights and/or biases, and then set to True after the layer is built by calling `build`
+            weights and/or biases, and then set to True after the layer is built by calling `build`.
          3. compute_output_shape (method): Only needed if the layer alters the shape of the input (like a dense layer).
             It should return the output shape of the layer after the inputs has passed through it.
          4. weights (attribute): Only needed if the layer has them. If the layer has weights but are called a different
@@ -80,6 +80,8 @@ class Layer:
          8. set_parameters (method): Optional, implement the logic to check if the passed weights and biases are
             compatible with how the layer weights' and biases' should look like, then call `super().set_parameters` to
             set them.
+         9. expected_dims (attribute): The expected number of dimensions that the layer expects the inputs to have. Only
+            needed when the layer have a restriction over the shape of the input, otherwise don't define it.
          * For a minimal working example, see `Dense` for creating a trainable layer by subclassing `Layer`, and
            `Dropout` for a non-trainable layer example.
 
@@ -102,6 +104,7 @@ class Layer:
         self.output = None
 
         self.input_shape = None
+        self.expected_dims = None
 
         self.built = None  # Set it to None and not False because some layers don't need to be built like activation
         # layers and None is used to denote that unlike False which means the layer hasn't been built yet.
@@ -158,10 +161,14 @@ class Layer:
 
     def __call__(self, inputs: ops.ndarray) -> ops.ndarray:
         """This method should be called when passing inputs through the layer."""
-        if inputs.ndim in (1, 3):  # One sample provided, but not with a batch dim, for example on image of shape
-            # (32, 32, 3), so we expand its dimensions to (1, 32, 32, 3).
-            inputs = ops.expand_dims(inputs, 0)
+        if not isinstance(inputs, ops.ndarray):
+            inputs = ops.array(inputs, self.dtype, order='C')
         curr_input_shape = inputs.shape
+        # Check if the input shape is compatible with the layer.
+        if self.expected_dims and inputs.ndim != self.expected_dims:
+            raise ValueError(
+                f"{self.name[:-2]} expects inputs to be {self.expected_dims} dimensional. Got input with {inputs.ndim} "
+                f"dimensions.")
         if self.built is False:
             self.build(curr_input_shape)
         if not self.input_shape:  # For when the layer isn't built, but its params exist like when calling
@@ -360,6 +367,7 @@ class Dense(Layer):
         self.weight_initializer = weight_initializer
         self.bias_initializer = bias_initializer
 
+        self.expected_dims = 2
         self.weights = None
         self.biases = None
         self.built = False
@@ -447,6 +455,7 @@ class SpatialLayer(Layer):
         self.strides = layer_utils.to_tuple(strides)
         self.padding = layer_utils.validate_padding(padding)
 
+        self.expected_dims = 4
         self._padding_dims = None
 
     @property
@@ -581,7 +590,7 @@ class Conv2D(SpatialLayer):
         return self.n_kernels
 
     def build(self, input_shape: tuple, activation: str = None) -> None:
-        if len(input_shape) != 4:
+        if len(input_shape) != self.expected_dims:
             raise ValueError(f'`input_shape` must be of shape (batch, height, width, channels). Got {input_shape}')
         if self.built:
             raise ValueError("The layer has already been built. A layer can only be built once.")
@@ -710,6 +719,7 @@ class BatchNormalization(Layer):
         self.weights = None  # Gamma.
         self.biases = None  # Beta.
         self.built = False
+        self.expected_dims = 4
 
     def get_reduction_axis(self, input_shape: tuple) -> tuple:
         """Returns a tuple of the axis(es) to perform the mean and variance calculation on. For instance the given axis
@@ -729,6 +739,8 @@ class BatchNormalization(Layer):
         return tuple([i for i in range(len(input_shape)) if i not in self.axis])
 
     def build(self, input_shape: Union[int, tuple], activation: str = None) -> None:
+        if len(input_shape) != self.expected_dims:
+            raise ValueError(f"BatchNormalization expects inputs to be 4 dimensional. Got {input_shape}.")
         self.reduction_axis = self.get_reduction_axis(input_shape)
         arrays_shape = ops.array(input_shape)
         arrays_shape[list(self.reduction_axis)] = 1
@@ -747,14 +759,16 @@ class BatchNormalization(Layer):
             self.reduction_axis = self.get_reduction_axis(self.input_shape)
         if self.training:
             mean = inputs.mean(self.reduction_axis, keepdims=True)
-            variance = inputs.var(self.reduction_axis, keepdims=True)
+            variance = inputs.var(self.reduction_axis, keepdims=True) + config.EPSILON
+            # Need to add a small value to variance in case any of the inputs is too small, this is needed because we're
+            # taking the square root and power -3/2 of it, and very small values may lead to NAN in these calculations.
             self.moving_mean = self.calculate_moving_average(self.moving_mean, mean)
             self.moving_var = self.calculate_moving_average(self.moving_var, variance)
         else:
             mean = self.moving_mean
             variance = self.moving_var
         xmm = inputs - mean
-        stddev = ops.sqrt(variance + config.EPSILON)
+        stddev = ops.sqrt(variance)
         normalized = xmm / stddev
         output = self.weights * normalized + self.biases
         if self.training:
