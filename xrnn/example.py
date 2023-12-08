@@ -109,4 +109,6 @@ def mnist_example(batch_size: int = 128, epochs: int = 1) -> None:
     print(f"Prediction: {label} - Actual: {y_test[0]}.")
 
 
-mnist_example()
+# For when it's run from the command line.
+if __name__ == "__main__":
+    mnist_example()
