@@ -90,8 +90,6 @@ class Model:
         -----
         That the first value in `input_shape` should be batch size not the number of samples in the dataset.
         """
-        if len(input_shape) in (1, 3):  # For when a sample input shape is provided with no batch size.
-            input_shape = (1, ) + input_shape
         self.batch_size = input_shape[0]
         self.built = True
         self.input_shape = input_shape
