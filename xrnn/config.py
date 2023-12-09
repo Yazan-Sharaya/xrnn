@@ -15,8 +15,8 @@ else:
 
 
 # The default values to use across the whole package.
-EPSILON: float = 1e-7  # A good value and small enough value for both float32, and it's changed to 1e-14 for float64.
-IMAGE_DATA_FORMAT: Literal['channels-first', 'channels-last'] = 'channels-last'
+EPSILON: float = 1e-7  # A good value for float32, and it's changed to 1e-14 for float64.
+IMAGE_DATA_FORMAT: Literal['channels-first', 'channels-last', 'channels_first', 'channels_last'] = 'channels-last'
 DTYPE: Union[Literal['float32', 'float64'], type] = 'float32'
 CREATED_OBJECTS: list = []  # A list that contains all objects that should be kept track of that have been created.
 SEEN_NAMES: Set[str] = set()  # A list tracking the names that have been seen during the session.
@@ -49,12 +49,18 @@ def set_default_dtype(dtype: Union[Literal['float32', 'float64'], type] = 'float
         trackable.dtype = DTYPE
 
 
-def set_image_data_format(image_format: Literal['channels-first', 'channels-last']) -> None:
+def set_image_data_format(
+        image_format: Literal['channels-first', 'channels-last', 'channels_first', 'channels_last']) -> None:
     """Sets how the images should be treated. If 'channels-last' (default), images are expected to have a shape
     of (batch_size, height, width, channels) or (NHWC), if 'channels-first' the expected shape is (NCHW).
     *Note* that the execution speed and model performance (loss) might differ slightly between the two image formats."""
-    if image_format not in ('channels-first', 'channels-last'):
-        raise ValueError(f"`image_format` must be 'channels-first' or 'channels-last'. Got {image_format} instead.")
+    # The function takes the underscore form of the inputs to stay consistent with tensorflow/keras way of doing this.
+    # However, it changes the underscore to a hyphen because that's how they are interpreted internally.
+    if image_format not in ('channels-first', 'channels-last', 'channels_first', 'channels_last'):
+        raise ValueError(
+            f"`image_format` must one of 'channels-first', 'channels-last', 'channels_first', 'channels_last'. "
+            f"Got {image_format} instead.")
+    image_format = image_format.replace("_", "-")
     global IMAGE_DATA_FORMAT
     IMAGE_DATA_FORMAT = image_format
 
