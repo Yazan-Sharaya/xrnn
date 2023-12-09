@@ -5,7 +5,7 @@ from xrnn import ops
 
 class ReLU(Layer):
 
-    def __init__(self, alpha: float = 0.):
+    def __init__(self, alpha: float = 0.) -> None:
         """
         Rectified linear unit activation function class. This is the most used activation function between network
         layers to introduce non-linearity, but is rarely (if ever) used as an output layer.
@@ -45,7 +45,7 @@ class ReLU(Layer):
 
 class LeakyReLU(ReLU):
 
-    def __init__(self, alpha: float = 0.01):
+    def __init__(self, alpha: float = 0.01) -> None:
         """
         Leaky ReLU activation function class. Leaky relu is used to solve relu's dying problem by introducing a slight
         slope in the negative range which cases the output of it have small negative numbers below zero.
