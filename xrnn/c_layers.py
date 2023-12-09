@@ -76,8 +76,9 @@ else:
 shared_lib_path = os.path.join(os.path.dirname(__file__), 'lib', 'c_layers' + shared_lib_file_extension)
 if not os.path.exists(shared_lib_path):
     raise FileNotFoundError(
-        "The compiled shared/dynamic library doesn't exist, please build it following the instructions in section"
-        "'Building from Source' in the `README.md`, or download a pre-built distribution (wheel).")
+        "The compiled shared/dynamic library doesn't exist, please build it following the instructions at"
+        "https://github.com/Yazan-Sharaya/xrnn?tab=readme-ov-file#building-from-source, "
+        "or download a pre-built distribution (wheel).")
 # Python caches the imported module so the following module level code will only be executed once, therefor the dynamic
 # library is only loaded once.
 functions_cdll = ctypes.CDLL(shared_lib_path)
