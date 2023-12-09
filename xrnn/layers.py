@@ -594,7 +594,7 @@ class Conv2D(SpatialLayer):
             raise ValueError(f'`input_shape` must be of shape (batch, height, width, channels). Got {input_shape}')
         if self.built:
             raise ValueError("The layer has already been built. A layer can only be built once.")
-        channels = input_shape[-1] if config.IMAGE_DATA_FORMAT == 'channels-last' else input_shape[1]
+        channels = input_shape[-1] if self.nhwc else input_shape[1]
         self.kernels = self.get_initialization_function(self.weight_initializer, activation)(
             (self.n_kernels, *self.window_size, channels))
         self.biases = self.initialize_biases(activation)
