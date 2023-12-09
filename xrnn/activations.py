@@ -24,22 +24,24 @@ class ReLU(Layer):
 
     def forward(self, inputs: ops.ndarray) -> ops.ndarray:
         # relu = max(0, x)
+        relu_where = inputs > 0
+        if self.training:
+            self.relu_where = relu_where  # Save this result because it's used both in the forward and backward passes
+            # for relu and leaky relu. Small memory footprint but measurable performance.
         if not self.alpha:
-            output = inputs * (inputs > 0)
+            output = inputs * self.relu_where
         else:
             # fills an array with inputs for inputs greater than zero and with inputs * alpha for inputs less than zero.
-            output = ops.where(inputs > 0, inputs, inputs * self.alpha)
-        if self.training:
-            self.inputs = inputs
+            output = ops.where(self.relu_where, inputs, inputs * self.alpha)
         return output
 
     def backward(self, d_values: ops.ndarray) -> ops.ndarray:
         # The derivative of relu is: 1(x > 0). And here we apply the chain rule directly (d_relu * gradients).
         if not self.alpha:
-            return d_values * (self.inputs > 0)
+            return d_values * self.relu_where
         # derivative of leaky relu is: {1; x > 0, alpha; x < 0)
-        dlrelu = ops.ones(self.inputs.shape)
-        dlrelu[self.inputs < 0] = self.alpha
+        dlrelu = ops.ones(self.relu_where.shape)
+        dlrelu[~self.relu_where] = self.alpha
         return d_values * dlrelu
 
 
@@ -94,6 +96,10 @@ class Softmax(Layer):
     Dense(3)  # Because there are three classes (dog, cat, car)
     Softmax()  # To turn the output to a probabilistic distribution.
     """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.expected_dims = 2
 
     def forward(self, inputs: ops.ndarray) -> ops.ndarray:
         # softmax = e^zi / sum(e^zj)
