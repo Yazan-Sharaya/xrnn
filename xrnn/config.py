@@ -17,7 +17,7 @@ else:
 # The default values to use across the whole package.
 EPSILON: float = 1e-7  # A good value for float32, and it's changed to 1e-14 for float64.
 IMAGE_DATA_FORMAT: Literal['channels-first', 'channels-last', 'channels_first', 'channels_last'] = 'channels-last'
-DTYPE: Union[Literal['float32', 'float64'], type] = 'float32'
+DTYPE: Union[Literal['float32', 'float64', 'f4', '<f4', 'f8', '<f8'], type] = 'float32'
 CREATED_OBJECTS: list = []  # A list that contains all objects that should be kept track of that have been created.
 SEEN_NAMES: Set[str] = set()  # A list tracking the names that have been seen during the session.
 MKL_WARNING_MSG: str = (
@@ -30,17 +30,26 @@ MKL_WARNING_MSG: str = (
 warnings.filterwarnings('once', MKL_WARNING_MSG, ResourceWarning)
 
 
-def set_default_dtype(dtype: Union[Literal['float32', 'float64'], type] = 'float32') -> None:
+def set_default_dtype(dtype: Union[Literal['float32', 'float64', 'f4', '<f4', 'f8', '<f8'], type] = 'float32') -> None:
     """Set a new default data type. Changing the data type will change the dtype for all subsequent operations after
     the function call. This function should only be used once preferably before using the model (train/inference)
     because it might lead to unstable training due to rounding errors and precision loss when converting data types."""
     global DTYPE, EPSILON
-    if not isinstance(dtype, str):
-        dtype = str(dtype)[-9:-2]  # Get string representation from numpy dtype objects, like np.float32.
+    if isinstance(dtype, type):
+        dtype = str(dtype)[-9:-2]  # Get string representation from np.float32. and np.float64
+    else:
+        dtype = str(dtype)  # Handles all other ways a dtype can be passed like using the .dtype property of arrays or
+        # when passing "<f4" for example to `np.dtype` class.
+    if dtype in ('f4', '<f4'):
+        dtype = 'float32'
+    elif dtype in ('f8', '<f8'):
+        dtype = 'float64'
     if dtype not in ('float32', 'float64'):
-        raise ValueError(
+        if dtype in ('>f4', '>f8'):
+            raise TypeError("Big endian floating point data types not supported.")
+        raise TypeError(
             f"dtype must be a string representing the float precision to use. "
-            f"Got: {DTYPE}. Available dtypes are `float32` and `float64`.")
+            f"Got: {dtype}. Available dtypes are `float32` and `float64`.")
     if dtype == DTYPE:
         return
     DTYPE = dtype
