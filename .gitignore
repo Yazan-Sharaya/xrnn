@@ -7,3 +7,4 @@ build
 xrnn.egg-info
 wheel_builder.py
 __pycache__
+.pytest_cache
