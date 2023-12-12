@@ -135,11 +135,11 @@ class DataHandler:
                 raise TypeError(
                     f"The values returned from the generator must be numpy arrays. "
                     f"Got x: {type(self.check_x)}, y: {type(self.check_y)}.")
-            try:
-                self.check_x, self.check_y = self.to_ndarray(self.check_x), self.to_ndarray(self.check_y)
-            except ValueError:
-                raise ValueError("The data must be homogenous, this means that all the elements have the same shape, "
-                                 "and that data provided doesn't satisfy this requirement.")
+            self.check_x, self.check_y = self.to_ndarray(self.check_x), self.to_ndarray(self.check_y)
+            if len(self.check_x) != len(self.check_y):
+                raise ValueError(
+                    f"The number of samples in both the input features and the labels must be the same. "
+                    f"Got x: {len(self.check_x)} samples, y: {len(self.check_y)} samples.")
         except ValueError as e:
             if str(e) == 'not enough values to unpack (expected 2, got 1)':
                 raise ValueError('The generator returned only one value. It should return two arrays instead.')
