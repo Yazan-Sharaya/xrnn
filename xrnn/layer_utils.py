@@ -1,17 +1,5 @@
 """This module contains some utility functions that are used by all sorts of layers."""
 from typing import Union, List
-import sys
-
-if sys.version_info.minor < 8:
-    from typing_extensions import Literal
-else:
-    from typing import Literal  # Literal was added to typing in python 3.8.
-
-
-# Importing this package's modules after the above imports so `Literal` can be defined when running code from the source
-# tree (doesn't happen) but it doesn't hurt importing them this way.
-from xrnn import optimizers
-from xrnn import layers
 from xrnn import config
 from xrnn import ops
 
@@ -39,7 +27,10 @@ def compute_spatial_output_shape(
     new_spatial_output: tuple
         (new height, new width).
     """
-
+    if len(padding_amount) != 4:
+        raise ValueError(
+            f'`padding_amount` must be a tuple containing four elements: pad_top, pad_bot, pad_left, pad_right. '
+            f'Got {padding_amount}.')
     if config.IMAGE_DATA_FORMAT == 'channels-last':
         input_shape = (input_shape[1], input_shape[2])
     else:
@@ -102,7 +93,7 @@ def to_tuple(maybe_tup: Union[int, tuple]) -> tuple:
     return tuple(maybe_tup)
 
 
-def validate_padding(padding: Literal['same', 'valid']) -> Literal['same', 'valid']:
+def validate_padding(padding: config.Literal['same', 'valid']) -> config.Literal['same', 'valid']:
     """Makes sure that padding mode is a valid one, meaning it's one of 'same' or 'valid', and returns it."""
     if padding not in ('same', 'valid'):
         raise ValueError(f"`padding` must be 'same' or 'valid'. Got {padding} instead.")
@@ -139,61 +130,61 @@ def extract_from_padded(inputs: ops.ndarray, padding_dims: tuple) -> ops.ndarray
     return inputs
 
 
-def layer_memory_consumption(layer, input_shape: tuple, optimizer: optimizers.Optimizer = None) -> tuple:
+def layer_memory_consumption(layer, input_shape: tuple = None, training: bool = True, adam: bool = False) -> tuple:
     """
     Calculates a layer's memory consumption separately for each of the following:
      1. Parameters: Memory consumed by the layer's weights and biases if it has them, if not it's zero.
      2. Gradients: Memory consumed by the layer's gradients, which are the derived weights, biases and some values
         created by the optimizer. *Note* that Adam uses slightly more memory than other optimizers.
-     3. Activations: Activations memory consumption doesn't calculate what is implies on first sight, which is memory
-        consumption for activation function layers. It actually calculates memory consumed by the layer saving the input
-        that was passed to it during the forward pass (called activation map) because the layer will use them again
-        during the backward pass. Activation memory consumption is zero if the layer is in inference mood (when training
-        is set to False) since the inputs aren't going to be saved because there's no backward pass.
+     3. Activations: Activations memory consumption doesn't calculate what it implies on first sight, which is memory
+        consumption for activation function layers. It actually calculates the memory consumed by the layer inputs' and
+        any intermediate results during the forward pass because the layer will use them again during the backward pass.
+        Activation memory consumption is zero if the layer is in inference mood (when training is set to False) since
+        the inputs/intermediates aren't going to be saved because there's no backward pass.
      4. Total memory consumption: The sum of the aforementioned.
 
     Parameters
     ----------
     layer: Layer subclass or instance
         The layer to calculate its memory consumption.
-    optimizer: Optimizer subclass or instance
-        An optimizer instance, this is needed to calculate the gradients memory consumption of the layer.
-        If an optimizer is not provided, it's assumed that the layer isn't going to be trained so gradients memory
-        consumption and activations memory consumption won't be calculated.
-    input_shape: tuple
+    input_shape: tuple, optional
         Input shape to the layer, this is needed to calculate the saved activation memory consumption. The first axis
-        should be the `batch_size`.
+        should be the `batch_size`. If not provided, the `input_shape` attribute of the layer will be used.
+    training: bool, optional
+        Whether to calculate gradient and activation memory consumption, because they are only needed when training.
+    adam: bool, optional
+        Whether adam optimizer is being used for training, this needs to be explicitly provided because 'adam' consumes
+        slightly more memory than other optimizers.
 
     Returns
     -------
     mem_consumption: tuple of four floats.
         parameters (weights + biases), gradients, saved activations, total memory consumption in bytes.
     """
-    mem_params = layer.weights.nbytes + layer.biases.nbytes if hasattr(layer, 'weights') else 0
-    mem_params += layer.weights.nbytes * 4 if isinstance(layer, layers.BatchNormalization) else 0
-    # weights.nbytes * 4: for saved mean, variance, moving mean and moving variance (they have the same size a weights).
-    mem_grads, mem_activation = 0, 0
-    if optimizer:
-        mem_grads = mem_params * 3 if isinstance(optimizer, optimizers.Adam) else mem_params * 2
-        if layer.training and not isinstance(layer, layers.Flatten):
-            padding = getattr(layer, 'padding', None) == 'same'
-            if padding:
-                ws = layer.window_size
-                pad_top, pad_bot, pad_left, pad_right = calculate_padding_on_sides(
-                    input_shape, ws, layer.strides)
-                ph, pw = pad_top + pad_bot, pad_left + pad_right
-                if config.IMAGE_DATA_FORMAT == 'channels-last':
-                    input_shape = (input_shape[0], input_shape[1] + ph, input_shape[2] + pw, input_shape[3])
-                else:
-                    input_shape = (input_shape[0], input_shape[1], input_shape[2] + ph, input_shape[3] + pw)
-            mem_activation = ops.prod(input_shape) * ops.dtype(config.DTYPE).itemsize
-            mem_activation *= 2 if isinstance(layer, layers.BatchNormalization) else 1
-    mem_params += layer.binary_mask.nbytes if isinstance(layer, layers.Dropout) else 0
-    return mem_params, mem_grads, mem_activation, mem_params + mem_grads + mem_activation
+    parameters_mem = layer.weights.nbytes + layer.biases.nbytes if hasattr(layer, 'weights') else 0
+    gradients_mem, intermediates_mem = 0, 0
+    # Stores memory consumption for the derived weights and biases and arrays created by the optimizer to calculate them
+    if training:
+        gradients_mem = parameters_mem * 3 if adam else parameters_mem * 2
+        if getattr(layer, 'padding', None) == 'same':
+            pt, pb, pr, pl = calculate_padding_on_sides(input_shape, layer.window_size, layer.strides)
+            ph, pw = pt + pb, pr + pl
+            if config.IMAGE_DATA_FORMAT == 'channels_last':
+                input_shape = (input_shape[0], input_shape[1] + ph, input_shape[2] + pw, input_shape[3])
+            else:
+                input_shape = (input_shape[0], input_shape[1], input_shape[2] + ph, input_shape[3] + pw)
+        intermediates_mem = ops.prod(input_shape) * ops.dtype(config.DTYPE).itemsize
+        intermediates_mem *= 2 if 'Dropout' in layer.name else 1
+        intermediates_mem *= 3 if 'BatchNormalization' in layer.name else 1
+    parameters_mem += layer.weights.nbytes * 3 if 'BatchNormalizatio' in layer.name and hasattr(layer, 'weights') else 0
+    return parameters_mem, gradients_mem, intermediates_mem, parameters_mem + gradients_mem + intermediates_mem
 
 
-def make_unique_name(name: str) -> str:
-    """Makes a given name unique during a session"""
+def make_unique_name(obj: object) -> str:
+    """Makes a given object name unique during a session."""
+    if isinstance(obj, type):
+        raise TypeError("The passed object must be initialized.")
+    name = str(type(obj)).split()[-1][1:].split('.')[-1][:-2]  # Just gets the name of the class (object).
     identifier = 0
     for seen_name in config.SEEN_NAMES:
         if seen_name.split('_')[0] == name.split('_')[0]:
