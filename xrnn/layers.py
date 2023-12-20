@@ -115,20 +115,25 @@ class Layer:
         self._dtype = config.DTYPE  # Set the default datatype.
         # Add the layer instance to the created layers list to keep track/manipulate it.
         config.CREATED_OBJECTS.append(self)
-        self.name = layer_utils.make_unique_name(str(type(self)).split('.')[-1][:-2])
+        self._name = layer_utils.make_unique_name(self)
 
     @property
-    def dtype(self) -> Union[config.Literal['float32', 'float64'], type]:
+    def name(self):  # Makes the name unchangeable.
+        return self._name
+
+    @property
+    def dtype(self) -> config.DTYPE:
         """Returns a string representing the data type of the layer. e.g. 'float32'."""
         return self._dtype
 
     @dtype.setter
-    def dtype(self, new_dtype: str):
+    def dtype(self, new_dtype: config.DTYPE_HINT):
+        new_dtype = config.parse_datatype(new_dtype)
         self._dtype = new_dtype
         for attribute_name in self.__dict__.keys():
             attribute = getattr(self, attribute_name)
             if isinstance(attribute, ops.ndarray):
-                if str(attribute.dtype) != str(new_dtype):
+                if attribute.dtype != new_dtype:
                     setattr(self, attribute_name, attribute.astype(new_dtype, 'C'))
 
     def compute_output_shape(self, input_shape: tuple) -> tuple:
@@ -163,23 +168,24 @@ class Layer:
         """This method should be called when passing inputs through the layer."""
         if not isinstance(inputs, ops.ndarray):
             inputs = ops.array(inputs, self.dtype, order='C')
-        curr_input_shape = inputs.shape
         # Check if the input shape is compatible with the layer.
         if self.expected_dims and inputs.ndim != self.expected_dims:
             raise ValueError(
-                f"{self.name[:-2]} expects inputs to be {self.expected_dims} dimensional. Got input with {inputs.ndim} "
+                f"{self.name} expects inputs to be {self.expected_dims} dimensional. Got input with {inputs.ndim} "
                 f"dimensions.")
+        curr_input_shape = inputs.shape
         if self.built is False:
             self.build(curr_input_shape)
         if not self.input_shape:  # For when the layer isn't built, but its params exist like when calling
             # `set_parameters()` without calling `build()`.
             self.input_shape = curr_input_shape
-        if self.input_shape[0] != curr_input_shape[0]:  # Variable batch size.
-            self.input_shape = (curr_input_shape[0], ) + self.input_shape[1:]
-        if self.input_shape[1:] != curr_input_shape[1:]:  # Variable input shape, not supported.
-            raise ValueError(
-                f"Variable input shape is not supported. The layer was originally built with shape "
-                f"(batch_size, {self.input_shape[1:]}), but got inputs of shape (batch_size, {curr_input_shape[1:]}).")
+        else:
+            if self.input_shape[0] != curr_input_shape[0]:  # Variable batch size.
+                self.input_shape = (curr_input_shape[0], ) + self.input_shape[1:]
+            if self.input_shape[1:] != curr_input_shape[1:]:  # Variable input shape, not supported.
+                raise ValueError(
+                    f"Variable input shape is not supported. The layer was originally built with shape "
+                    f"(batch_size, {self.input_shape[1:]}), but inputs shape is: (batch_size, {curr_input_shape[1:]}).")
         if inputs.dtype != self.dtype:
             inputs = inputs.astype(self.dtype)
         if getattr(self, 'padding', None) == 'same':
@@ -189,8 +195,7 @@ class Layer:
                 inputs, layer_utils.calculate_padding_on_sides(curr_input_shape, window_size, strides))
         if self.training:
             self.inputs = inputs
-        outputs = self.forward(inputs)
-        return outputs
+        return self.forward(inputs)
 
     def backward(self, d_values: ops.ndarray) -> ops.ndarray:
         """
@@ -211,13 +216,16 @@ class Layer:
     @staticmethod
     def get_initialization_function(method: str, activation: Optional[str] = None) -> Callable[[tuple], ops.ndarray]:
         """
-        Takes the method name as a string and returns the actual function.
+        Takes the method name as a string and returns a callable that takes `input_shape` and fills it with values
+        according to `method`. "xavier" and "he" are implemented following [1]_ and [2]_ respectively.
 
         Parameters
         ----------
         method: {'zeros', 'ones', 'standard_normal', 'xavier', 'he', 'auto'}
             A sting indicating the initialization method name. Allowed methods are: 'zeros', 'ones',
-            'standard_normal', 'xavier', 'he', 'auto'.
+            'standard_normal', 'xavier' `(aka Glorot Uniform)`, 'he' `(aka Kaiming)`, 'auto'. If the method is set
+            to 'auto', then the initialization function is determined by the activation function. If the activation is
+            'relu', the method is set `fan in`, otherwise `fan out` method is used.
         activation: {'relu', 'tanh', 'sigmoid', 'softmax'}, optional
             A string indicating the layer activation function. Only needed if `method` is set to `auto`.
 
@@ -225,6 +233,11 @@ class Layer:
         -------
         init_func: function
             Initialization function the takes `input_shape` and returns an array of weights with the same shape.
+
+        References
+        ----------
+        .. [1] https://proceedings.mlr.press/v9/glorot10a/glorot10a.pdf
+        .. [2] https://arxiv.org/pdf/1502.01852.pdf
         """
         def uniform_init(input_shape: tuple, mode: str = 'fan_avg') -> ops.ndarray:
             """Returns a numpy function to initialize the weights using a method based on `mode`.
@@ -252,7 +265,7 @@ class Layer:
             if activation == 'relu':
                 return partial(uniform_init, mode='fan_in')
             raise ValueError(
-                f"When using `auto` initialization method, `activation` must be of `relu`, `tanh`, `sigmoid` or "
+                f"When using `auto` initialization method, `activation` must be one of: `relu`, `tanh`, `sigmoid` or "
                 f"`softmax`. Got {activation} instead.")
         if method == 'xavier':
             return partial(uniform_init, mode='fan_avg')
@@ -444,7 +457,7 @@ class SpatialLayer(Layer):
             self,
             window_size: Union[int, tuple],
             strides: Union[int, tuple] = 1,
-            padding: layer_utils.Literal['same', 'valid'] = 'valid',
+            padding: config.Literal['same', 'valid'] = 'valid',
             weight_l2: float = 0.,
             bias_l2: float = 0.,
             kernel_initializer: str = 'auto',
@@ -526,7 +539,7 @@ class Conv2D(SpatialLayer):
             kernels: int,
             kernel_size: Union[int, tuple],
             strides: Union[int, tuple] = 1,
-            padding: layer_utils.Literal['same', 'valid'] = 'valid',
+            padding: config.Literal['same', 'valid'] = 'valid',
             weight_l2: float = 0.,
             bias_l2: float = 0.,
             kernel_initializer: str = 'auto',
@@ -624,8 +637,8 @@ class Pooling2D(SpatialLayer):
             self,
             pool_size: Union[tuple, int],
             strides: Optional[Union[tuple, int]] = 1,
-            padding: layer_utils.Literal['same', 'valid'] = 'valid',
-            mode: layer_utils.Literal['max', 'avg'] = None) -> None:
+            padding: config.Literal['same', 'valid'] = 'valid',
+            mode: config.Literal['max', 'avg'] = None) -> None:
         super().__init__(pool_size, strides, padding)
         if mode not in ('max', 'avg'):
             raise ValueError(f"Mode must either be 'max' or 'avg'. Got '{mode}'")
@@ -660,7 +673,7 @@ class MaxPooling2D(Pooling2D):
             self,
             pool_size: Union[tuple, int],
             strides: Optional[Union[tuple, int]] = 1,
-            padding: layer_utils.Literal['same', 'valid'] = 'valid') -> None:
+            padding: config.Literal['same', 'valid'] = 'valid') -> None:
         super().__init__(pool_size, strides, padding, 'max')
 
 
@@ -669,7 +682,7 @@ class AvgPooling2D(Pooling2D):
             self,
             pool_size: Union[tuple, int],
             strides: Optional[Union[tuple, int]] = 1,
-            padding: layer_utils.Literal['same', 'valid'] = 'valid') -> None:
+            padding: config.Literal['same', 'valid'] = 'valid') -> None:
         super().__init__(pool_size, strides, padding, 'avg')
 
 
