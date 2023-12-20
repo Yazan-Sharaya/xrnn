@@ -30,8 +30,8 @@ class DataHandler:
             self,
             x: Union[SupportsGetitem, list, ops.ndarray],
             y: Optional[Union[list, ops.ndarray]] = None,
-            batch_size: int = 32,
-            shuffle: bool = True) -> None:
+            batch_size: Optional[int] = 32,
+            shuffle: Optional[bool] = True) -> None:
         """
         Envelopes the data provided and creates a DataHandler class around them which slices the into batches of size
         `batch_size` and optionally shuffles it, so it can be fed into the neural network for training or inference.
@@ -109,12 +109,13 @@ class DataHandler:
         config.CREATED_OBJECTS.append(self)
 
     @property
-    def dtype(self) -> Union[config.Literal["float32", "float64"], type]:
+    def dtype(self) -> config.DTYPE_HINT:
         """Returns the data type of the data."""
         return self._dtype
 
     @dtype.setter
-    def dtype(self, new_dtype: str) -> None:
+    def dtype(self, new_dtype: config.DTYPE_HINT) -> None:
+        new_dtype = config.parse_datatype(new_dtype)
         self._dtype = new_dtype
         if self.y is not None:
             self.x = self.to_ndarray(self.x)
@@ -142,15 +143,24 @@ class DataHandler:
                     f"Got x: {len(self.check_x)} samples, y: {len(self.check_y)} samples.")
         except ValueError as e:
             if str(e) == 'not enough values to unpack (expected 2, got 1)':
-                raise ValueError('The generator returned only one value. It should return two arrays instead.')
-            raise ValueError(
-                "The generator returned more than two values. It should only return batch_x, batch_y.")
-        except TypeError as e:
-            if str(e) == 'cannot unpack non-iterable NoneType object':
-                raise TypeError("The generator only returned one value or didn't return anything at all."
-                                " It should return two values, batch_x and batch_y.")
+                # Chaining the thrown exception with ours to be more verbose and in case the exception was actually
+                # thrown from within the generator and not because of the unpacking of the returned values.
+                raise ValueError(
+                    'The generator returned only one value. It should return two arrays instead. This probably '
+                    'happened because the generator returned an iterable (for e.g. a numpy array) containing only one '
+                    'value.') from e
+            elif str(e) == 'too many values to unpack (expected 2)':
+                raise ValueError(
+                    "The generator returned more than two values. It should only return batch_x, batch_y.") from e
             raise e
-        self.batch_size = len(self.check_x)
+        except TypeError as e:
+            if 'cannot unpack non-iterable' in str(e):
+                raise TypeError("The generator only returned one value or didn't return anything at all. "
+                                "It should return two values, batch_x and batch_y.") from e
+            raise e  # Raise the exception thrown if it doesn't match the expected exception
+        except Exception as e:
+            raise RuntimeError(
+                "The previous error occurred while trying to retrieve the first item from the generator.") from e
         return True
 
     def to_ndarray(self, arr: ops.ndarray) -> ops.ndarray:
@@ -165,28 +175,34 @@ class DataHandler:
         except ValueError:
             raise ValueError("The data must be homogenous, this means that all the elements have the same shape, "
                              "and that data provided doesn't satisfy this requirement.")
+        except TypeError as e:
+            raise TypeError(
+                f"Could not convert the input array which has a type of {type(arr)} to a numpy array with a "
+                f"{self.dtype} datatype.") from e
 
     def __getitem__(self, idx: int) -> Tuple[ops.ndarray, ops.ndarray]:
         """Returns batch_x, batch_y each containing `batch_size` number of samples at index `idx`."""
-        if idx >= len(self):
-            raise ValueError(
-                f"`idx` must be less than the number of batches in the dataset which equal {len(self)}. Got {idx}")
         if self.y is None:
             if self.check_x is not None:
                 batch_x, batch_y = self.check_x.copy(), self.check_y.copy()
                 self.check_x, self.check_y = None, None
                 return self.to_ndarray(batch_x), self.to_ndarray(batch_y)  # Just to convert the dtype if necessary.
             try:
-                return self.x[idx]
+                batch_x, batch_y = self.x[idx]
+                if not len(batch_x) or not len(batch_y):
+                    raise IndexError(
+                        "A an empty array was returned. This is probably due to out of bounds indexing. A good reason "
+                        "why that might've happened is that the `__len__` method of generator is returning an "
+                        "incorrect number of batches which leads to accessing slices of the array that are empty.")
+                return self.to_ndarray(batch_x), self.to_ndarray(batch_y)  # Just to convert the dtype if necessary.
+            except IndexError as e:
+                raise e  # Raise our IndexError if it occurred to not catch in proceeding catch.
             except Exception as e:
                 # Raise a runtime error from the exception thrown by self.x[idx] because it's the direct cause.
                 raise RuntimeError(
                     f"The generator threw the previous exception when it's called to get data at index {idx}.") from e
         if idx == 0 and self.shuffle:  # Shuffle the data everytime we loop over it from the start.
             self.batch_indices = ops.random.permutation(self.batch_indices)
-            # permutation = ops.random.permutation(len(self.x))
-            # self.x = self.x[permutation]
-            # self.y = self.y[permutation]
         if not self.batch_size:
             return self.x, self.y
         st_idx, end_idx = self.batch_indices[idx] * self.batch_size, (self.batch_indices[idx] + 1) * self.batch_size
