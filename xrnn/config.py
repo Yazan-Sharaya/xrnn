@@ -2,11 +2,12 @@
 the default data type used to store arrays and perform calculations, and changing how layers that take images as input
 deal with them by calling `set_image_data_format(data_format)`."""
 import numpy.__config__ as np_config
+import numpy as np
 from typing import Union, Set
 import warnings
 import ctypes
-import os
 import sys
+import os
 
 if sys.version_info.minor < 8:
     from typing_extensions import Literal
@@ -14,10 +15,12 @@ else:
     from typing import Literal  # Literal was added to typing in python 3.8.
 
 
+IMAGE_FORMAT_HINT = Literal['channels-first', 'channels-last', 'channels_first', 'channels_last']
+DTYPE_HINT = Union[Literal['float32', 'f', 'f4', '<f4', 'single', 'float64', 'f8', '<f8', 'double', 'float', 'd'], type]
 # The default values to use across the whole package.
 EPSILON: float = 1e-7  # A good value for float32, and it's changed to 1e-14 for float64.
-IMAGE_DATA_FORMAT: Literal['channels-first', 'channels-last', 'channels_first', 'channels_last'] = 'channels-last'
-DTYPE: Union[Literal['float32', 'float64', 'f4', '<f4', 'f8', '<f8'], type] = 'float32'
+IMAGE_DATA_FORMAT: IMAGE_FORMAT_HINT = 'channels-last'
+DTYPE: DTYPE_HINT = 'float32'
 CREATED_OBJECTS: list = []  # A list that contains all objects that should be kept track of that have been created.
 SEEN_NAMES: Set[str] = set()  # A list tracking the names that have been seen during the session.
 MKL_WARNING_MSG: str = (
@@ -30,26 +33,40 @@ MKL_WARNING_MSG: str = (
 warnings.filterwarnings('once', MKL_WARNING_MSG, ResourceWarning)
 
 
-def set_default_dtype(dtype: Union[Literal['float32', 'float64', 'f4', '<f4', 'f8', '<f8'], type] = 'float32') -> None:
+def parse_datatype(dtype: DTYPE_HINT) -> Literal['float32', 'float64']:
+    """Parses the datatype from a multitude of sources and return either 'float32' or 'float64'. This function can take
+    a lot of different sources as the `dtype` argument such as numpy arrays, numpy `dtype` objects, `.dtype` property
+    of numpy objects that have it, string literals, python `float`, numpy datatype objects like `np.float32` or
+    `np.single`, etc. If you happen to pass a thing that can't be parsed the function will be pretty verbose."""
+    if dtype is float:
+        return 'float64'
+    if dtype is np.float32 or dtype is np.single:
+        return 'float32'
+    if dtype is np.float64 or dtype is np.float_ or dtype is np.double:
+        return 'float64'
+    if not isinstance(dtype, str):
+        if hasattr(dtype, 'dtype'):
+            dtype = str(dtype.dtype)
+        else:
+            dtype = str(dtype)
+    if dtype in ('float32', 'f', 'f4', '<f4', 'single'):
+        return 'float32'
+    elif dtype in ('float64', 'f8', '<f8', 'double', 'float', 'd'):
+        return 'float64'
+    elif '>' in dtype:
+        raise TypeError("Big endian byte order not supported.")
+    else:
+        raise TypeError(
+            f"Expected one of 'float32', 'f', 'f4', '<f4', 'single', 'float64', 'f8', '<f8', 'double', 'float', "
+            f"but got {dtype}. For a description of acceptable input arguments, look at the function documentation.")
+
+
+def set_default_dtype(dtype: DTYPE_HINT = 'float32') -> None:
     """Set a new default data type. Changing the data type will change the dtype for all subsequent operations after
     the function call. This function should only be used once preferably before using the model (train/inference)
     because it might lead to unstable training due to rounding errors and precision loss when converting data types."""
     global DTYPE, EPSILON
-    if isinstance(dtype, type):
-        dtype = str(dtype)[-9:-2]  # Get string representation from np.float32. and np.float64
-    else:
-        dtype = str(dtype)  # Handles all other ways a dtype can be passed like using the .dtype property of arrays or
-        # when passing "<f4" for example to `np.dtype` class.
-    if dtype in ('f4', '<f4'):
-        dtype = 'float32'
-    elif dtype in ('f8', '<f8'):
-        dtype = 'float64'
-    if dtype not in ('float32', 'float64'):
-        if dtype in ('>f4', '>f8'):
-            raise TypeError("Big endian floating point data types not supported.")
-        raise TypeError(
-            f"dtype must be a string representing the float precision to use. "
-            f"Got: {dtype}. Available dtypes are `float32` and `float64`.")
+    dtype = parse_datatype(dtype)
     if dtype == DTYPE:
         return
     DTYPE = dtype
@@ -59,7 +76,7 @@ def set_default_dtype(dtype: Union[Literal['float32', 'float64', 'f4', '<f4', 'f
 
 
 def set_image_data_format(
-        image_format: Literal['channels-first', 'channels-last', 'channels_first', 'channels_last']) -> None:
+        image_format: IMAGE_FORMAT_HINT) -> None:
     """Sets how the images should be treated. If 'channels-last' (default), images are expected to have a shape
     of (batch_size, height, width, channels) or (NHWC), if 'channels-first' the expected shape is (NCHW).
     *Note* that the execution speed and model performance (loss) might differ slightly between the two image formats."""
