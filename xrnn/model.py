@@ -381,7 +381,8 @@ class Model:
         input_shape = (batch_size, ) + self.input_shape[1:]
         tot = 0
         for layer in self.layers:
-            tot += layer_utils.layer_memory_consumption(layer, input_shape, self.optimizer)[-1]
+            tot += layer_utils.layer_memory_consumption(
+                layer, input_shape, True, isinstance(self.optimizer, optimizers.Adam))[-1]
             input_shape = layer.compute_output_shape(input_shape)
         return tot
 
@@ -452,7 +453,7 @@ class Model:
             tot_params += params
             if memory_consumption:
                 mem_params, mem_grads, mem_activation, mem_tot = layer_utils.layer_memory_consumption(
-                    layer, input_shape, self.optimizer)
+                    layer, input_shape, True, isinstance(self.optimizer, optimizers.Adam))
                 tot_mem_params += mem_params
                 tot_mem_grads += mem_grads
                 tot_mem_activations += mem_activation
