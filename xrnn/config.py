@@ -19,7 +19,7 @@ IMAGE_FORMAT_HINT = Literal['channels-first', 'channels-last', 'channels_first',
 DTYPE_HINT = Union[Literal['float32', 'f', 'f4', '<f4', 'single', 'float64', 'f8', '<f8', 'double', 'float', 'd'], type]
 # The default values to use across the whole package.
 EPSILON: float = 1e-7  # A good value for float32, and it's changed to 1e-14 for float64.
-IMAGE_DATA_FORMAT: IMAGE_FORMAT_HINT = 'channels-last'
+IMAGE_DATA_FORMAT: Literal['channels-last', 'channels-first'] = 'channels-last'
 DTYPE: DTYPE_HINT = 'float32'
 CREATED_OBJECTS: list = []  # A list that contains all objects that should be kept track of that have been created.
 SEEN_NAMES: Set[str] = set()  # A list tracking the names that have been seen during the session.
