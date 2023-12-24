@@ -169,7 +169,7 @@ def layer_memory_consumption(layer, input_shape: tuple = None, training: bool = 
         if getattr(layer, 'padding', None) == 'same':
             pt, pb, pr, pl = calculate_padding_on_sides(input_shape, layer.window_size, layer.strides)
             ph, pw = pt + pb, pr + pl
-            if config.IMAGE_DATA_FORMAT == 'channels_last':
+            if config.IMAGE_DATA_FORMAT == 'channels-last':
                 input_shape = (input_shape[0], input_shape[1] + ph, input_shape[2] + pw, input_shape[3])
             else:
                 input_shape = (input_shape[0], input_shape[1], input_shape[2] + ph, input_shape[3] + pw)
