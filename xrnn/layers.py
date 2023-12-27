@@ -180,19 +180,19 @@ class Layer:
             # `set_parameters()` without calling `build()`.
             self.input_shape = curr_input_shape
         else:
-            if self.input_shape[0] != curr_input_shape[0]:  # Variable batch size.
-                self.input_shape = (curr_input_shape[0], ) + self.input_shape[1:]
             if self.input_shape[1:] != curr_input_shape[1:]:  # Variable input shape, not supported.
                 raise ValueError(
                     f"Variable input shape is not supported. The layer was originally built with shape "
                     f"(batch_size, {self.input_shape[1:]}), but inputs shape is: (batch_size, {curr_input_shape[1:]}).")
+            if self.input_shape[0] != curr_input_shape[0]:  # Variable batch size.
+                self.input_shape = (curr_input_shape[0], ) + self.input_shape[1:]
         if inputs.dtype != self.dtype:
             inputs = inputs.astype(self.dtype)
         if getattr(self, 'padding', None) == 'same':
             window_size = getattr(self, 'window_size')
             strides = getattr(self, 'strides')
             inputs = layer_utils.pad_batch(
-                inputs, layer_utils.calculate_padding_on_sides(curr_input_shape, window_size, strides))
+                inputs, layer_utils.calculate_padding_on_sides(self.input_shape, window_size, strides))
         if self.training:
             self.inputs = inputs
         return self.forward(inputs)
@@ -389,6 +389,8 @@ class Dense(Layer):
                 self.build(input_dim)
 
     def build(self, input_shape: Union[int, tuple], activation: str = None) -> None:
+        if self.built:
+            raise ValueError('A layer can only be built once.')
         input_d = input_shape[-1] if isinstance(input_shape, tuple) else input_shape
         self.weights = self.get_initialization_function(self.weight_initializer, activation)((input_d, self.units))
         self.biases = self.initialize_biases(activation)
@@ -421,6 +423,8 @@ class Dropout(Layer):
         A layer that disables up to `rate` neurons randomly. The disabled neurons are not the same each run,
         thus `randomly` disabling neurons.
 
+        .. note:: The neurons that get "turned off" are random for each batch.
+
         Parameters
         ----------
         rate: float
@@ -431,19 +435,11 @@ class Dropout(Layer):
             raise ValueError('Dropout rate value must be between zero and one.')
         self.rate = 1 - rate  # The numpy functions that is used to implement dropout takes the success rate
         # (result equals 1), that's why we invert the rate.
-        self.built = False
         self.binary_mask = None
-
-    def build(self, input_shape: Union[int, tuple], activation: str = None) -> None:
-        # Divide by the same rate so the mean stays the same
-        self.binary_mask = ops.random.binomial(1, self.rate, input_shape) / self.rate
-        self.built = True
 
     def forward(self, inputs: ops.ndarray) -> ops.ndarray:
         if self.training:
-            if inputs.shape != self.binary_mask.shape:  # If the inputs shape doesn't match the existing binary mask
-                # create a new one. (Happens when the number of samples in each step varies).
-                self.build(inputs.shape)
+            self.binary_mask = ops.random.binomial(1, self.rate, self.input_shape) / self.rate
             return inputs * self.binary_mask
         return inputs
 
@@ -471,6 +467,11 @@ class SpatialLayer(Layer):
         self.expected_dims = 4
         self._padding_dims = None
 
+    def calculate_padding_amount(self, input_shape: tuple) -> tuple:
+        """Returns a tuple containing how many pixels to add on each size (pad_top, pad_bot, pad_left, pad_right)."""
+        return (0, 0, 0, 0) if self.padding == 'valid' else layer_utils.calculate_padding_on_sides(
+            input_shape, self.window_size, self.strides)
+
     @property
     def padding_amount(self) -> tuple:
         """Returns a tuple containing how many pixels to add on each size (pad_top, pad_bot, pad_left, pad_right)."""
@@ -479,14 +480,14 @@ class SpatialLayer(Layer):
         return self._padding_dims
 
     @property
+    def padded_input_shape(self) -> tuple:
+        """Returns the shape of the padded inputs."""
+        return layer_utils.padded_input_shape(self.input_shape, self.padding_amount)
+
+    @property
     def nhwc(self) -> bool:
         """Returns True if the current image data format is NHWC (channels-last) and False if NCHW (channels-first)"""
         return True if config.IMAGE_DATA_FORMAT == 'channels-last' else False
-
-    def calculate_padding_amount(self, input_shape: tuple) -> tuple:
-        """Returns a tuple containing how many pixels to add on each size (pad_top, pad_bot, pad_left, pad_right)."""
-        return (0, 0, 0, 0) if self.padding == 'valid' else layer_utils.calculate_padding_on_sides(
-            input_shape, self.window_size, self.strides)
 
     def compute_output_shape(self, input_shape: tuple) -> tuple:
         padding_dims = self.calculate_padding_amount(input_shape)
@@ -528,7 +529,7 @@ class SpatialLayer(Layer):
         return (*args,
                 *self.window_size, *self.strides,
                 *self.to_nhwc_format(self.output_shape),
-                *self.to_nhwc_format(self.inputs.shape)[1:end_idx],
+                *self.to_nhwc_format(self.padded_input_shape)[1:end_idx],
                 self.nhwc)
 
 
@@ -589,7 +590,7 @@ class Conv2D(SpatialLayer):
     @property
     def weights(self) -> ops.ndarray:
         """A property that returns the kernels of the layer which is the same as weights but is named kernels because
-        that's more convenient. This property is needed because different parts of the module use and manipulate the
+        that's more convenient. This property is needed because different parts of the package use and manipulate the
         weights attribute of the layer and this layer doesn't explicitly have it, so this method makes all the calls
         consistent across layers."""
         return self.kernels
@@ -603,10 +604,14 @@ class Conv2D(SpatialLayer):
         return self.n_kernels
 
     def build(self, input_shape: tuple, activation: str = None) -> None:
-        if len(input_shape) != self.expected_dims:
-            raise ValueError(f'`input_shape` must be of shape (batch, height, width, channels). Got {input_shape}')
         if self.built:
-            raise ValueError("The layer has already been built. A layer can only be built once.")
+            raise ValueError('A layer can only be built once.')
+        if len(input_shape) not in (3, 4):
+            raise ValueError(
+                f"`input_shape` must have a length of 3 (not including batch dimension) or 4 "
+                f"(including batch dimension). Got {input_shape}")
+        if len(input_shape) == 3:
+            input_shape = (1, *input_shape)
         channels = input_shape[-1] if self.nhwc else input_shape[1]
         self.kernels = self.get_initialization_function(self.weight_initializer, activation)(
             (self.n_kernels, *self.window_size, channels))
@@ -616,12 +621,12 @@ class Conv2D(SpatialLayer):
 
     def forward(self, inputs: ops.ndarray) -> ops.ndarray:
         feature_maps = ops.zeros(self.output_shape)
-        args = self.make_arguments_list(inputs, self.weights, self.biases, feature_maps)
+        args = self.make_arguments_list(inputs, self.kernels, self.biases, feature_maps)
         c_layers.convForwardF(*args) if self.dtype == 'float32' else c_layers.convForwardD(*args)
         return feature_maps
 
     def backward(self, d_values: ops.ndarray) -> ops.ndarray:
-        d_inputs = ops.zeros(self.inputs.shape)
+        d_inputs = ops.zeros(self.padded_input_shape)
         self.d_weights = ops.zeros(self.kernels.shape)
         self.d_biases = d_values.sum((0, 1, 2) if self.nhwc else (0, 2, 3))
         args = self.make_arguments_list(self.inputs, self.kernels, d_values, self.d_weights, d_inputs)
@@ -644,6 +649,7 @@ class Pooling2D(SpatialLayer):
             raise ValueError(f"Mode must either be 'max' or 'avg'. Got '{mode}'")
         self.masks = None
         self.use_max = True if mode == 'max' else False
+        self.expected_dims = 4
 
     def forward(self, inputs: ops.ndarray) -> ops.ndarray:
         feature_maps = ops.zeros(self.output_shape)
@@ -657,14 +663,14 @@ class Pooling2D(SpatialLayer):
         return feature_maps
 
     def backward(self, d_values: ops.ndarray) -> ops.ndarray:
-        d_inputs = ops.zeros(self.inputs.shape)
+        d_inputs = ops.zeros(self.padded_input_shape)
         args = (d_values, self.masks, d_inputs) if self.use_max else (d_values, d_inputs)
         args = self.make_arguments_list(*args)
         if self.dtype == 'float32':
             c_layers.maxPoolBackwardF(*args) if self.use_max else c_layers.avgPoolBackwardF(*args)
         else:
             c_layers.maxPoolBackwardD(*args) if self.use_max else c_layers.avgPoolBackwardD(*args)
-        d_inputs = layer_utils.extract_from_padded(d_inputs, self.calculate_padding_amount(self.input_shape))
+        d_inputs = layer_utils.extract_from_padded(d_inputs, self.padding_amount)
         return d_inputs
 
 
@@ -732,13 +738,24 @@ class BatchNormalization(Layer):
         self.weights = None  # Gamma.
         self.biases = None  # Beta.
         self.built = False
-        self.expected_dims = 4
 
-    def get_reduction_axis(self, input_shape: tuple) -> tuple:
+    def get_reduction_axis(self, n_dims: int) -> tuple:
         """Returns a tuple of the axis(es) to perform the mean and variance calculation on. For instance the given axis
-        is -1 and data format is `channels-last` this gives (0, 1, 2) reduction axis."""
+        is -1 and data format is `channels-last` this gives (0, 1, 2) reduction axis.
+
+        Parameters
+        ----------
+        n_dims: int
+            How many dimensions that input is expected to have, for e.g. it should be 4 for image inputs.
+        """
+        if n_dims not in (2, 4):
+            raise ValueError(f"`n_dims` must be either 2 or 4. Got {n_dims}")
+        if isinstance(self.axis, (list, tuple)) and len(self.axis) == n_dims:
+            raise ValueError(
+                f"`axis` can't have the same number of axes as `n_dims`, this will result in reducing the output to a "
+                f"scaler value, which isn't supported and probably not what you intended.")
         if not self.axis:
-            self.axis = -1 if config.IMAGE_DATA_FORMAT == 'channels-last' else 1
+            self.axis = -1 if config.IMAGE_DATA_FORMAT == 'channels-last' or n_dims == 2 else 1
         if not isinstance(self.axis, list):
             # Convert it to a list to be able to assign values to it (tuples are mutable and ints are not iterable).
             if isinstance(self.axis, int):
@@ -747,14 +764,20 @@ class BatchNormalization(Layer):
                 self.axis = list(self.axis)
         for i in range(len(self.axis)):
             if self.axis[i] < 0:  # Handle end-relative (negative) axis.
-                self.axis[i] = len(input_shape) + self.axis[i]  # Get absolute axis.
+                self.axis[i] = n_dims + self.axis[i]  # Get absolute axis.
         self.axis = tuple(self.axis)  # Convert it back to tuple because numpy doesn't support a {list} of axis.
-        return tuple([i for i in range(len(input_shape)) if i not in self.axis])
+        return tuple([i for i in range(n_dims) if i not in self.axis])
 
     def build(self, input_shape: Union[int, tuple], activation: str = None) -> None:
-        if len(input_shape) != self.expected_dims:
-            raise ValueError(f"BatchNormalization expects inputs to be 4 dimensional. Got {input_shape}.")
-        self.reduction_axis = self.get_reduction_axis(input_shape)
+        if self.built:
+            raise ValueError('A layer can only be built once.')
+        if isinstance(input_shape, int):
+            input_shape = (1, input_shape)
+        elif len(input_shape) == 3:
+            input_shape = (1, *input_shape)
+        if len(input_shape) not in (2, 4):
+            raise ValueError(f'`input_shape` must have a length of 2 or 4. Got {input_shape}')
+        self.reduction_axis = self.get_reduction_axis(len(input_shape))
         arrays_shape = ops.array(input_shape)
         arrays_shape[list(self.reduction_axis)] = 1
         self.weights = self.get_initialization_function(self.weight_initializer, activation)(tuple(arrays_shape))
@@ -801,7 +824,7 @@ class BatchNormalization(Layer):
 
         d_norm = d_values * self.weights
         d_variance = ops.sum(
-            d_norm * self.xmm * -0.5 * ops.power(self.variance, -3/2), self.reduction_axis, keepdims=True)
+            d_norm * self.xmm * -0.5 * ops.power(self.variance, -1.5), self.reduction_axis, keepdims=True)
         d_mean = (ops.sum(d_norm * -stddev_inv, self.reduction_axis, keepdims=True) +
                   d_variance * ops.sum(-xmm2, self.reduction_axis, keepdims=True))
 
@@ -813,7 +836,7 @@ class BatchNormalization(Layer):
 
 class Flatten(Layer):
     """
-    Flattens the inputs across feature dimensions (height, width, channels) and keeps the batch size dimension.
+    Flattens the inputs across feature dimensions and keeps the batch dimension.
 
     Examples
     --------
