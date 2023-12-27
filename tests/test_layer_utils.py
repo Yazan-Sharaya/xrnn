@@ -23,7 +23,7 @@ dense_batch_nbytes = 128 * 256 * 4
         (nchw_shape, (4, 4), (6, 6), (6, 6), 'channels_first'),
     ]
 )
-def test_padded_output_shape(input_shape, window_size, strides, expected, image_format: config.IMAGE_FORMAT_HINT):
+def test_padded_output_shape(input_shape, window_size, strides, expected, image_format):
     """This function tests both `layer_utils.compute_spatial_output_shape` and `layer_utils.calculate_padding_on_sides`
     at the same time because they depend on each other, and we are more interested in the output shape rather than the
     return of each function individually."""
