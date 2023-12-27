@@ -15,7 +15,6 @@ else:
     from typing import Literal  # Literal was added to typing in python 3.8.
 
 
-IMAGE_FORMAT_HINT = Literal['channels-first', 'channels-last', 'channels_first', 'channels_last']
 DTYPE_HINT = Union[Literal['float32', 'f', 'f4', '<f4', 'single', 'float64', 'f8', '<f8', 'double', 'float', 'd'], type]
 # The default values to use across the whole package.
 EPSILON: float = 1e-7  # A good value for float32, and it's changed to 1e-14 for float64.
@@ -76,7 +75,7 @@ def set_default_dtype(dtype: DTYPE_HINT = 'float32') -> None:
 
 
 def set_image_data_format(
-        image_format: IMAGE_FORMAT_HINT) -> None:
+        image_format: Literal['channels-first', 'channels-last', 'channels_first', 'channels_last']) -> None:
     """Sets how the images should be treated. If 'channels-last' (default), images are expected to have a shape
     of (batch_size, height, width, channels) or (NHWC), if 'channels-first' the expected shape is (NCHW).
     *Note* that the execution speed and model performance (loss) might differ slightly between the two image formats."""
