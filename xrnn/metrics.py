@@ -27,7 +27,7 @@ class Accuracy:
             return lambda y_true, y_pred: (y_pred > 0.5).astype(int) == y_true
         # Regression accuracy
         if isinstance(self.loss, losses.MeanSquaredError):
-            return lambda y_true, y_pred: ops.abs(y_true - y_pred) < (ops.std(y_true) / 250)
+            return lambda y_true, y_pred: ops.absolute(y_true - y_pred) < (ops.std(y_true) / 250)
 
     def calculate(self, y_true: ops.ndarray, y_pred: ops.ndarray) -> float:
         """
