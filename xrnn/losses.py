@@ -40,7 +40,7 @@ class Loss:
     def calculate(self, y_true: ops.ndarray, y_pred: ops.ndarray) -> float:
         """A uniform way to calculate the loss and regularization loss as a single number. *Note* this method
         calculates an accumulated loss from all batches not the current batch loss."""
-        sample_losses = self.forward(y_true, y_pred)
+        sample_losses = self(y_true, y_pred)
         self.accumulate_loss += ops.sum(sample_losses)
         self.accumulate_count += len(sample_losses)
         return self.accumulate_loss / self.accumulate_count + self.regularization_loss()
@@ -50,6 +50,10 @@ class Loss:
         raise NotImplementedError("This method must be overridden.")
 
     def __call__(self, y_true: ops.ndarray, y_pred: ops.ndarray) -> ops.ndarray:
+        """Calculates the loss sample wise using the `forward` method of the loss function class."""
+        if not isinstance(self, CategoricalCrossentropy):
+            if y_true.ndim == 1:
+                y_true = ops.expand_dims(y_true, 1)
         return self.forward(y_true, y_pred)
 
 
@@ -98,7 +102,6 @@ class BinaryCrossentropy(Loss):
 
     def forward(self, y_true: ops.ndarray, y_pred: ops.ndarray) -> ops.ndarray:
         # BinaryCrossentropy = -y_true * log(y_pred) + (1 - y_true) * log(1 - y_pred)
-        y_true = ops.expand_dims(y_true, 1) if y_true.ndim == 1 else y_true
         y_pred_clipped = ops.clip(y_pred, config.EPSILON, 1 - config.EPSILON)
         sample_losses = -(y_true * ops.log(y_pred_clipped) + (1 - y_true) * ops.log(1 - y_pred_clipped))
         sample_losses = ops.mean(sample_losses, axis=-1)
@@ -106,7 +109,8 @@ class BinaryCrossentropy(Loss):
 
     def backward(self, y_true: ops.ndarray, d_values: ops.ndarray) -> ops.ndarray:
         # The derivative of BinaryCrossentropy is: -1/N * (y_true/y_hat - (1 - y_true)/(1 - y_hat))
-        y_true = ops.expand_dims(y_true, 1) if y_true.ndim == 1 else y_true
+        if y_true.ndim == 1:
+            y_true = ops.expand_dims(y_true, 1)
         clipped_dvalues = ops.clip(d_values, config.EPSILON, 1 - config.EPSILON)  # To avoid division by zero.
         return -(y_true / clipped_dvalues - (1 - y_true) / (1 - clipped_dvalues)) / len(d_values[0]) / len(d_values)
 
@@ -117,12 +121,12 @@ class MSE(Loss):
 
     def forward(self, y_true: ops.ndarray, y_pred: ops.ndarray) -> ops.ndarray:
         # MSE = 1/N * sum((y_true - y_hat) ** 2)
-        y_true = ops.expand_dims(y_true, 1) if y_true.ndim == 1 else y_true
         return ops.mean(ops.square(y_true - y_pred), axis=-1)  # Sample wise loss.
 
     def backward(self, y_true: ops.ndarray, d_values: ops.ndarray) -> ops.ndarray:
         # The derivative of mse is: -2/N * (y_true - y_hat)
-        y_true = ops.expand_dims(y_true, 1) if y_true.ndim == 1 else y_true
+        if y_true.ndim == 1:
+            y_true = ops.expand_dims(y_true, 1)
         return -2 * (y_true - d_values) / len(d_values[0]) / len(y_true)
 
 
