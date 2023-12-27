@@ -100,6 +100,29 @@ def validate_padding(padding: config.Literal['same', 'valid']) -> config.Literal
     return padding
 
 
+def padded_input_shape(input_shape: tuple, padding_amount: tuple) -> tuple:
+    """
+    Returns the padded input shape
+
+    Parameters
+    ----------
+    input_shape: tuple
+        input shape to be padded.
+    padding_amount: tuple
+        A tuple of four ints specifying the padding amount on each side of the input.
+
+    Returns
+    -------
+    padded_input_shape: tuple
+        The shape of the padded input.
+    """
+    ph = sum(padding_amount[:2])
+    pw = sum(padding_amount[2:])
+    if config.IMAGE_DATA_FORMAT == 'channels-last':
+        return input_shape[0], input_shape[1] + ph, input_shape[2] + pw, input_shape[3]
+    return input_shape[0], input_shape[1], input_shape[2] + ph, input_shape[3] + pw
+
+
 def pad_batch(inputs: ops.ndarray, padding_dims: tuple) -> ops.ndarray:
     """Zero pads the inputs from all sides (top, bottom, left, right) along the height and width axis."""
     if not sum(padding_dims):
@@ -167,12 +190,8 @@ def layer_memory_consumption(layer, input_shape: tuple = None, training: bool = 
     if training:
         gradients_mem = parameters_mem * 3 if adam else parameters_mem * 2
         if getattr(layer, 'padding', None) == 'same':
-            pt, pb, pr, pl = calculate_padding_on_sides(input_shape, layer.window_size, layer.strides)
-            ph, pw = pt + pb, pr + pl
-            if config.IMAGE_DATA_FORMAT == 'channels-last':
-                input_shape = (input_shape[0], input_shape[1] + ph, input_shape[2] + pw, input_shape[3])
-            else:
-                input_shape = (input_shape[0], input_shape[1], input_shape[2] + ph, input_shape[3] + pw)
+            input_shape = padded_input_shape(
+                input_shape, calculate_padding_on_sides(input_shape, layer.window_size, layer.strides))
         intermediates_mem = ops.prod(input_shape) * ops.dtype(config.DTYPE).itemsize
         intermediates_mem *= 2 if 'Dropout' in layer.name else 1
         intermediates_mem *= 3 if 'BatchNormalization' in layer.name else 1
