@@ -29,10 +29,10 @@ class ReLU(Layer):
             self.relu_where = relu_where  # Save this result because it's used both in the forward and backward passes
             # for relu and leaky relu. Small memory footprint but measurable performance.
         if not self.alpha:
-            output = inputs * self.relu_where
+            output = inputs * relu_where
         else:
             # fills an array with inputs for inputs greater than zero and with inputs * alpha for inputs less than zero.
-            output = ops.where(self.relu_where, inputs, inputs * self.alpha)
+            output = ops.where(relu_where, inputs, inputs * self.alpha)
         return output
 
     def backward(self, d_values: ops.ndarray) -> ops.ndarray:
