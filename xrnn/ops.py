@@ -72,7 +72,7 @@ class _Random(_random.Generator):
             unpredictable entropy will be pulled from the OS. If an ``int`` or
             ``array_like[ints]`` is passed, then it will be passed to
             `SeedSequence` to derive the initial `BitGenerator` state. One may also
-            pass in a `SeedSequence` instance.
+            pass in a `SeedSequence` instance. *Note*: To pick a new random seed automatically pass None.
         """
         super().__init__(_random.PCG64(seed))
 
