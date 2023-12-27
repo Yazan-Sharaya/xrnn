@@ -1,5 +1,9 @@
+import sys
+if sys.version_info.minor > 6:
+    from contextlib import nullcontext
+else:
+    from contextlib import suppress as nullcontext
 from xrnn.data_handler import DataHandler
-from contextlib import nullcontext
 from xrnn import ops
 import pytest
 
