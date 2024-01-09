@@ -101,6 +101,7 @@ class TestSpatialLayer:
     # The padding tests aren't for testing if padding behaviour is correct, that is tested for in `test_layer_utils.py`,
     # it's just to make sure it's working as intended from within the layers.
     def test_calculate_padding_amount(self, spatial_layer):
+        config.set_image_data_format('channels-last')
         assert sum(spatial_layer(2, 2, 'valid').calculate_padding_amount((0,))) == 0
         assert sum(spatial_layer(2, 2, 'same').calculate_padding_amount(nhwc_shape)) == 0
         assert sum(spatial_layer().calculate_padding_amount(nhwc_shape)) == 2
