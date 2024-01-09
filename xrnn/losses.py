@@ -34,12 +34,14 @@ class Loss:
         self.accumulate_count = 0
 
     def forward(self, y_true: ops.ndarray, y_pred: ops.ndarray) -> ops.ndarray:
-        """Calculates the loss sample wise using the loss function."""
+        """Calculates the loss sample wise using the loss function. Calculating the loss should be done by calling the
+        loss class `'loss(y_true, y_pred)'` not by calling `forward` directly."""
         raise NotImplementedError('This method must be overridden.')
 
     def calculate(self, y_true: ops.ndarray, y_pred: ops.ndarray) -> float:
         """A uniform way to calculate the loss and regularization loss as a single number. *Note* this method
-        calculates an accumulated loss from all batches not the current batch loss."""
+        calculates an accumulated loss from all batches not only the current batch loss, which results in a smoother
+        trend. The backward pass is still performed every batch."""
         sample_losses = self(y_true, y_pred)
         self.accumulate_loss += ops.sum(sample_losses)
         self.accumulate_count += len(sample_losses)
@@ -50,7 +52,11 @@ class Loss:
         raise NotImplementedError("This method must be overridden.")
 
     def __call__(self, y_true: ops.ndarray, y_pred: ops.ndarray) -> ops.ndarray:
-        """Calculates the loss sample wise using the `forward` method of the loss function class."""
+        """Calculates the loss sample wise using the `forward` method of the loss function class. This method should be
+        called not `forward` because it performs some modifications on the input before passing to `forward`."""
+        # Clip data to prevent division by 0.
+        # Clip both sides to not drag mean towards any value.
+        y_pred = ops.clip(y_pred, config.EPSILON, 1 - config.EPSILON)
         if not isinstance(self, CategoricalCrossentropy):
             if y_true.ndim == 1:
                 y_true = ops.expand_dims(y_true, 1)
@@ -66,11 +72,13 @@ class CategoricalCrossentropy(Loss):
 
     def forward(self, y_true: ops.ndarray, y_pred: ops.ndarray) -> ops.ndarray:
         # CategoricalCrossentropy = -log(yik), k: correct class index
-        # Clip data to prevent division by 0
-        # Clip both sides to not drag mean towards any value
-        y_pred = ops.clip(y_pred, config.EPSILON, 1 - config.EPSILON)
-        if len(y_true.shape) == 2:  # if labels are one-hot encoded convert them to a sparse array
-            y_true = ops.argmax(y_true, axis=1)
+        if y_true.ndim == 2:
+            if y_true.shape[1] == 1:  # If the second dimension is 1, we can get rid of it, because it's either integer
+                # classes or just two classes, we can safely assume that's the case because for the labels to be one hot
+                # encoded, the second dimension should at least be 2.
+                y_true = ops.squeeze(y_true)
+            else:  # if labels are one-hot encoded convert them to a sparse array
+                y_true = ops.argmax(y_true, axis=1)
         try:
             correct_confidences = y_pred[ops.arange(len(y_true)), y_true.astype('int')]
         except IndexError:  # Try blocks are really cheap when no exceptions are raised. Much cheaper than checking
@@ -84,7 +92,7 @@ class CategoricalCrossentropy(Loss):
     def backward(self, y_true: ops.ndarray, d_values: ops.ndarray) -> ops.ndarray:
         # The derivative of CategoricalCrossentropy is: -y_true / y_hat.
         # If labels are sparse, turn them into one-hot vector
-        if len(y_true.shape) == 1:
+        if y_true.ndim == 1:
             y_true = ops.eye(len(d_values[0]))[y_true]
         d_values = ops.clip(d_values, config.EPSILON,  ops.max(d_values) - config.EPSILON)  # To avoid division by zero.
         return -y_true / d_values / len(d_values)  # The loss derivative. Normalize the gradients.
@@ -102,8 +110,7 @@ class BinaryCrossentropy(Loss):
 
     def forward(self, y_true: ops.ndarray, y_pred: ops.ndarray) -> ops.ndarray:
         # BinaryCrossentropy = -y_true * log(y_pred) + (1 - y_true) * log(1 - y_pred)
-        y_pred_clipped = ops.clip(y_pred, config.EPSILON, 1 - config.EPSILON)
-        sample_losses = -(y_true * ops.log(y_pred_clipped) + (1 - y_true) * ops.log(1 - y_pred_clipped))
+        sample_losses = -(y_true * ops.log(y_pred) + (1 - y_true) * ops.log(1 - y_pred))
         sample_losses = ops.mean(sample_losses, axis=-1)
         return sample_losses
 
