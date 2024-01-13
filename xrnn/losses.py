@@ -39,9 +39,14 @@ class Loss:
         raise NotImplementedError('This method must be overridden.')
 
     def calculate(self, y_true: ops.ndarray, y_pred: ops.ndarray) -> float:
-        """A uniform way to calculate the loss and regularization loss as a single number. *Note* this method
-        calculates an accumulated loss from all batches not only the current batch loss, which results in a smoother
-        trend. The backward pass is still performed every batch."""
+        """
+        A uniform way to calculate the loss and regularization loss as a single number.
+
+        Notes
+        -----
+        This method calculates an accumulated loss from all batches not only the current batch loss, which results in a
+        smoother trend. The backward pass is still performed every batch.
+        """
         sample_losses = self(y_true, y_pred)
         self.accumulate_loss += ops.sum(sample_losses)
         self.accumulate_count += len(sample_losses)
@@ -54,9 +59,10 @@ class Loss:
     def __call__(self, y_true: ops.ndarray, y_pred: ops.ndarray) -> ops.ndarray:
         """Calculates the loss sample wise using the `forward` method of the loss function class. This method should be
         called not `forward` because it performs some modifications on the input before passing to `forward`."""
-        # Clip data to prevent division by 0.
-        # Clip both sides to not drag mean towards any value.
-        y_pred = ops.clip(y_pred, config.EPSILON, 1 - config.EPSILON)
+        if not isinstance(self, MSE):
+            # Clip data to prevent division by 0.
+            # Clip both sides to not drag mean towards any value.
+            y_pred = ops.clip(y_pred, config.EPSILON, 1 - config.EPSILON)
         if not isinstance(self, CategoricalCrossentropy):
             if y_true.ndim == 1:
                 y_true = ops.expand_dims(y_true, 1)
@@ -134,7 +140,7 @@ class MSE(Loss):
         # The derivative of mse is: -2/N * (y_true - y_hat)
         if y_true.ndim == 1:
             y_true = ops.expand_dims(y_true, 1)
-        return -2 * (y_true - d_values) / len(d_values[0]) / len(y_true)
+        return -2 * (y_true - d_values) / len(d_values[0]) / len(d_values)
 
 
 MeanSquaredError = MSE  # Alias
