@@ -1,19 +1,20 @@
 """Implements Adam, SGD, RMSprop, Adagrad optimization algorithms. Also implements the base Optimizer class the custom
 optimizers should subclass, see `~Optimizer` docstrings for more info on subclassing behaviour."""
 from typing import Callable
+
 from xrnn import config
 from xrnn import ops
 
-decay_func_signature = Callable[[float, float, int, int], float]
+DecayFunSig = Callable[[float, float, int, int], float]
 
 
 class Optimizer:
 
     def __init__(
             self,
-            learning_rate: float = 1.,
+            learning_rate: float = 0.001,
             decay: float = 0.,
-            decay_func: decay_func_signature = None) -> None:
+            decay_func: DecayFunSig = None) -> None:
         """
         Base optimizer class. Implements universal methods used by all other optimizers like handling learning rate
         decay and keeping track of some variables.
@@ -23,7 +24,8 @@ class Optimizer:
         learning_rate: float, optional
             The learning rate value. Each optimizer has a different default learning rate value.
         decay: float, optional
-            Set this value to a number greater than zero if you want to exponentially decay the learning rate.
+            Set this value to a number greater than zero if you want to exponentially decay the learning rate per
+            iteration (batch) according to the following: `initial_lr * (1 / (1 + decay_value * current_iteration))`.
         decay_func: Callable, optional
             A custom decaying function. This function must accept four arguments in this order:
             `initial_lr`, `current_lr`, `iteration`, `epoch`. And it should return a float/int value which is the new
@@ -58,7 +60,7 @@ class Optimizer:
         self.iterations = 0
         self.epoch = 0
 
-        if decay == 0. and decay_func:
+        if decay != 0. and decay_func:
             raise ValueError("You can't set both `decay` and `decay_fun`, please just set one.")
         if self.decay_func:
             self.validate_decay_function(decay_func)
@@ -69,6 +71,10 @@ class Optimizer:
         Some optimizers keep a cache of previously calculated gradients. This method initialises placeholders that
         are going to be used by the optimizer when updating the layer parameters'.
 
+        .. note::
+           Weight/bias cache and weight/bias momentums cache are bound to the layer not the optimizer, so if a new
+           optimizer is chosen for the same model, it will use the previously declared and used caches.
+
         Parameters
         ----------
         layer: Layer
@@ -78,16 +84,15 @@ class Optimizer:
         momentums: bool, optional
             Whether to create momentum arrays for the weights and biases.
         """
-        if not hasattr(layer, 'weights_cache'):
-            if cache:
-                layer.weights_cache = ops.zeros(layer.weights.shape, layer.weights.dtype)
-                layer.biases_cache = ops.zeros(layer.biases.shape, layer.biases.dtype)
-            if momentums:
-                layer.weight_momentums = ops.zeros(layer.weights.shape, layer.weights.dtype)
-                layer.bias_momentums = ops.zeros(layer.biases.shape, layer.biases.dtype)
+        if not hasattr(layer, 'weights_cache') and cache:
+            layer.weights_cache = ops.zeros(layer.weights.shape, layer.weights.dtype)
+            layer.biases_cache = ops.zeros(layer.biases.shape, layer.biases.dtype)
+        if not hasattr(layer, 'weight_momentums') and momentums:
+            layer.weight_momentums = ops.zeros(layer.weights.shape, layer.weights.dtype)
+            layer.bias_momentums = ops.zeros(layer.biases.shape, layer.biases.dtype)
 
     @staticmethod
-    def validate_decay_function(decay_func: decay_func_signature) -> None:
+    def validate_decay_function(decay_func: DecayFunSig) -> None:
         """Checks if the provided custom `decay_func` can be used."""
         try:
             new_lr = decay_func(0.1, 1e-3, 0, 0)
@@ -95,7 +100,9 @@ class Optimizer:
                 raise TypeError(f"`decay_func` should return an `int` or `float` which is the new learning rate. "
                                 f"Got {type(new_lr)}.")
         except Exception as e:
-            raise RuntimeError(f"`decay_func` didn't work and raised the previous exception") from e
+            if '`decay_func`' in str(e):
+                raise e
+            raise RuntimeError("`decay_func` didn't work and raised the previous exception") from e
 
     def update_learning_rate(self) -> None:
         """Updates the current learning rate if `decay` or `decay_func` is set."""
@@ -129,17 +136,17 @@ class SGD(Optimizer):
 
     def __init__(
             self,
-            learning_rate: float = 1,
+            learning_rate: float = 0.01,
             momentum: float = 0.,
             decay: float = 0.,
-            decay_func: decay_func_signature = None) -> None:
+            decay_func: DecayFunSig = None) -> None:
         """
         Stochastic Gradient Descent optimization algorithm class.
 
         One of the oldest optimization algorithms that was
         used to train neural networks and is still heavily in use to this day because of how effective yet simple it is,
-        especially when used with momentum. (can be achieved by setting `momentum` to a value other than zero in the
-        constructor)
+        especially when used with momentum. (Can be achieved by setting `momentum` to a value other than zero in the
+        constructor).
 
         Parameters
         ----------
@@ -190,7 +197,7 @@ class Adagrad(Optimizer):
         layer.weights_cache += ops.square(layer.d_weights)
         layer.biases_cache += ops.square(layer.d_biases)
 
-        # epsilon is used, so we don't encounter division by zero error.
+        # Epsilon is used, so we don't encounter division by zero errors.
         layer.weights += -self.current_lr * layer.d_weights / (ops.sqrt(layer.weights_cache) + config.EPSILON)
         layer.biases += -self.current_lr * layer.d_biases / (ops.sqrt(layer.biases_cache) + config.EPSILON)
 
@@ -243,7 +250,7 @@ class Adam(Optimizer):
             self,
             learning_rate: float = 1e-3,
             decay: float = 0.,
-            decay_func: decay_func_signature = None,
+            decay_func: DecayFunSig = None,
             beta_1: float = 0.9,
             beta_2: float = 0.999) -> None:
         """
@@ -256,7 +263,8 @@ class Adam(Optimizer):
         algorithms in terms of convergence speed (reaches same model performance as other techniques but with less
         training time) and better model performance. Using it as the goto optimizer is common and usually a good choice.
 
-        .. note:: Adam is a more complex algorithm than SGD and that is reflected in its computational footprint, the
+        .. note::
+           Adam is a more complex algorithm than SGD and that is reflected in its computational footprint, the
            difference is small (2-5% on a real dataset), but it's there.
 
         Parameters
