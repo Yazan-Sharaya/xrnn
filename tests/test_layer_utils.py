@@ -1,7 +1,8 @@
-from xrnn import layer_utils
-from xrnn import config
-from xrnn import layers
 import pytest
+
+from xrnn import config
+from xrnn import layer_utils
+from xrnn import layers
 
 nhwc_shape = (128, 32, 32, 3)
 nchw_shape = (128, 3, 32, 32)
@@ -87,9 +88,25 @@ def test_layer_memory_consumption(layer, expected_params, expected_activations, 
 def test_make_unique_name():
     class Test:
         pass
+
     assert layer_utils.make_unique_name(1) == 'int_0'
     assert layer_utils.make_unique_name(1) == 'int_1'
     assert layer_utils.make_unique_name(Test()) == 'Test_0'
     assert layer_utils.make_unique_name(Test()) == 'Test_1'
     with pytest.raises(TypeError):
         layer_utils.make_unique_name(object)
+
+
+@pytest.mark.parametrize(
+    "time, expected",
+    [
+        (0.2, '20 ms'),
+        (32.33, '32 sec'),
+        (32.53, '33 sec'),
+        (121.32, '2.0 min'),
+        (1.52 * 60 * 60, '1.5 hrs'),
+        (34.44 * 60 * 60 * 24, '34.44 days')
+    ]
+)
+def test_time_unit_converter(time, expected):
+    assert layer_utils.time_unit_converter(time) == expected
