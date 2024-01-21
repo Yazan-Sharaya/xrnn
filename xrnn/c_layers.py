@@ -1,10 +1,11 @@
 """This module loads the shared library that contain function definitions for convolution and pooling that were written
 in c and compiled into a shared library for performance reasons and makes these functions callable from python."""
-from typing import Union, Optional, Any, Callable
-from xrnn import ops
-import platform
 import ctypes
 import os
+import platform
+from typing import Union, Optional, Any, Callable
+
+from xrnn import ops
 
 
 def make_argtypes_list(
@@ -64,24 +65,31 @@ def make_callable(function: Callable, argtypes: list, restype: Optional[Union[li
 
 operating_system = platform.system()
 if operating_system == 'Windows':
-    shared_lib_file_extension = '.dll'
+    SHARED_LIB_FILE_EXTENSION = '.dll'
 elif operating_system == 'Linux':
-    shared_lib_file_extension = '.so'
+    SHARED_LIB_FILE_EXTENSION = '.so'
 elif operating_system == 'Darwin':
-    shared_lib_file_extension = '.dylib'
+    SHARED_LIB_FILE_EXTENSION = '.dylib'
 else:
     raise OSError(
         f"Operating system unsupported ({operating_system}). Supported OSes are Windows, Linux and Mac (Darwin).")
 
-shared_lib_path = os.path.join(os.path.dirname(__file__), 'lib', 'c_layers' + shared_lib_file_extension)
-if not os.path.exists(shared_lib_path):
+SHARED_LIB_PATH = os.path.join(os.path.dirname(__file__), 'lib', 'c_layers' + SHARED_LIB_FILE_EXTENSION)
+if not os.path.exists(SHARED_LIB_PATH):
     raise FileNotFoundError(
         "The compiled shared/dynamic library doesn't exist, please build it following the instructions at"
         "https://github.com/Yazan-Sharaya/xrnn?tab=readme-ov-file#building-from-source, "
         "or download a pre-built distribution (wheel).")
 # Python caches the imported module so the following module level code will only be executed once, therefor the dynamic
 # library is only loaded once.
-functions_cdll = ctypes.CDLL(shared_lib_path)
+# If the operating system windows, use windll.LoadLibrary instead of CDLL or cdll.LoadLibrary because it uses stdcall,
+# and that's useful when passing too many arguments to c function by raising a TypeError, making it almost impossible
+# to pass the wrong number of arguments to the c functions. Using CDLL on Windows would allow passing too many arguments
+# but that's not the case for Linux and macOS.
+if operating_system == 'Windows':
+    functions_cdll = ctypes.windll.LoadLibrary(SHARED_LIB_PATH)
+else:
+    functions_cdll = ctypes.CDLL(SHARED_LIB_PATH)
 
 # Convolution forward operation that takes float inputs.
 convForwardF = functions_cdll.convForwardF
