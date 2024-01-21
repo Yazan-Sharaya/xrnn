@@ -1,4 +1,5 @@
 import sys
+
 if sys.version_info.minor > 6:
     from contextlib import nullcontext
 else:
@@ -38,6 +39,11 @@ class ReturnTwoWrongType(OnlyLen):
         return 1, 2
 
 
+class ReturnDifferentLength(OnlyLen):
+    def __getitem__(self, idx):
+        return x[:2], y[:3]
+
+
 class WrongLen:
 
     def __init__(self):
@@ -54,7 +60,6 @@ class WrongLen:
 
 
 class CorrectGenerator(WrongLen):
-
     def __len__(self):
         return len(self.x) // self.batch_size
 
@@ -83,11 +88,23 @@ class RaiseZeroDivisionErrorWhenIterating(OnlyLen):
 
 
 x = ops.ones((10, 10))
-y = ops.ones((10, ))
-data_handler = DataHandler(x, y, 2)
+y = ops.ones((10,))
 
 
 class TestDataHandler:
+
+    @pytest.mark.parametrize(
+        "features, labels, raises",
+        [
+            (x, y, nullcontext()),
+            (x, y[:5], pytest.raises(ValueError)),
+            (x, None, pytest.raises(TypeError)),
+            (CorrectGenerator(), None, nullcontext())
+        ]
+    )
+    def test_constructor(self, features, labels, raises):
+        with raises:
+            DataHandler(features, labels)
 
     @pytest.mark.parametrize(
         "generator, expect",
@@ -98,6 +115,7 @@ class TestDataHandler:
             (ReturnOneNonIterable, pytest.raises(TypeError)),
             (ReturnOneIterable, pytest.raises(ValueError)),
             (ReturnTwoWrongType, pytest.raises(TypeError)),
+            (ReturnDifferentLength, pytest.raises(ValueError)),
             (RaiseValueErrorGenerator, pytest.raises(ValueError)),
             (RaiseTypeErrorGenerator, pytest.raises(TypeError)),
             (RaiseZeroDivisionErrorGenerator, pytest.raises(RuntimeError)),
@@ -119,13 +137,17 @@ class TestDataHandler:
     )
     def test_to_ndarray(self, array, error):
         with error:
-            assert data_handler.to_ndarray(array).dtype == 'float32'
+            assert DataHandler(x, y, 2).to_ndarray(array).dtype == 'float32'
 
     @pytest.mark.parametrize(
         'test_size, expect', [
             (0.1, nullcontext()),
             (0.01, pytest.raises(ValueError)),
             (0.99, pytest.raises(ValueError)),
+            (-1, pytest.raises(ValueError)),
+            (0, pytest.raises(ValueError)),
+            (1, pytest.raises(ValueError)),
+            (1.2, pytest.raises(ValueError))
         ]
     )
     def test_train_test_split(self, test_size, expect):
@@ -137,11 +159,38 @@ class TestDataHandler:
         [
             (WrongLen, pytest.raises(IndexError)),
             (RaiseZeroDivisionErrorWhenIterating, pytest.raises(RuntimeError)),
-            (CorrectGenerator, nullcontext())
+            (CorrectGenerator, nullcontext()),
+            (lambda: DataHandler(CorrectGenerator()), nullcontext())
         ]
     )
-    def test_getitem(self, generator, expect):
+    def test_getitem_exception_handling(self, generator, expect):
         with expect:
             dataset = DataHandler(generator())
             for idx in range(len(dataset)):
-                assert dataset[idx]
+                features, labels = dataset[idx]
+                assert len(features) == len(labels)
+
+    @pytest.mark.parametrize(
+        "features, labels, batch_size",
+        [
+            (x, y, 2),
+            (CorrectGenerator(), None, 2),
+            (CorrectGenerator(), None, None),
+            (DataHandler(CorrectGenerator()), None, None),
+            (x, y, 1),
+            (x, y, None),
+            (x, y, len(x)),
+            (x, y, 3),
+            (x, y, 4),
+            (x, y, 11)
+        ]
+    )
+    def test_getitem_return_length(self, features, labels, batch_size):
+        dataset = DataHandler(features, labels, batch_size)
+        for idx in range(len(dataset)):
+            x_batch, y_batch = dataset[idx]
+            if batch_size:
+                assert len(x_batch) == batch_size or len(x_batch) == len(features) - batch_size * (len(dataset) - 1)
+            else:
+                if isinstance(features, ops.ndarray):
+                    assert len(x_batch) == len(y_batch) == len(features)
