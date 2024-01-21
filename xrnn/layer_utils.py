@@ -1,5 +1,6 @@
 """This module contains some utility functions that are used by all sorts of layers."""
 from typing import Union, List
+
 from xrnn import config
 from xrnn import ops
 
@@ -36,7 +37,7 @@ def compute_spatial_output_shape(
     else:
         input_shape = input_shape[2:]
     return tuple(
-        (input_shape[i] + sum(padding_amount[i*2:i*2+2]) - window_size[i]
+        (input_shape[i] + sum(padding_amount[i * 2:i * 2 + 2]) - window_size[i]
          ) // strides[i] + 1 for i in range(len(input_shape)))
 
 
@@ -214,7 +215,14 @@ def make_unique_name(obj: object) -> str:
 
 
 def to_readable_unit_converter(num: Union[int, float], n_digits: int = 2) -> str:
-    """Prints the number of bytes in a human-readable format."""
+    """
+    Prints the number of bytes in a human-readable format.
+
+    .. note::
+       This method prefixes the units with 'iB', because it calculates the units using powers of 2 (IEC) not 10 (SI),
+       that's why it prints `Kib` and not `KB` and I don't want to add the confusion, so I'm sticking with the standard
+       for the calculations and unit names, please don't argue with me, it's not my fault.
+    """
     # Thanks to https://stackoverflow.com/a/1094933
     for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
         if abs(num) < 1024.0:
@@ -248,7 +256,7 @@ def time_unit_converter(time: float) -> str:
     """Gets the time in seconds and returns a string representing the time in a nice ETA way. For e.g. 180.30 is
     converted to 3.0 minutes."""
     if time < 1:
-        return f"{time:.2f} ms"
+        return f"{time * 100:.0f} ms"
     if 1 <= time < 60:
         return f"{time:2.0f} sec"
     if 60 <= time < 3600:
