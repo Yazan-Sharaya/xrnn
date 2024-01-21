@@ -82,7 +82,7 @@ class CategoricalCrossentropy(Loss):
             if y_true.shape[1] == 1:  # If the second dimension is 1, we can get rid of it, because it's either integer
                 # classes or just two classes, we can safely assume that's the case because for the labels to be one hot
                 # encoded, the second dimension should at least be 2.
-                y_true = ops.squeeze(y_true)
+                y_true = ops.squeeze(y_true.copy())  # Need to copy because squeeze returns the same array/view of it.
             else:  # if labels are one-hot encoded convert them to a sparse array
                 y_true = ops.argmax(y_true, axis=1)
         try:
@@ -98,9 +98,9 @@ class CategoricalCrossentropy(Loss):
     def backward(self, y_true: ops.ndarray, d_values: ops.ndarray) -> ops.ndarray:
         # The derivative of CategoricalCrossentropy is: -y_true / y_hat.
         # If labels are sparse, turn them into one-hot vector
-        if y_true.ndim == 1:
-            y_true = ops.eye(len(d_values[0]))[y_true]
-        d_values = ops.clip(d_values, config.EPSILON,  ops.max(d_values) - config.EPSILON)  # To avoid division by zero.
+        if y_true.ndim == 1 or y_true.shape[1] == 1:
+            y_true = ops.eye(len(d_values[0]))[y_true.squeeze()]
+        d_values = ops.clip(d_values, config.EPSILON, ops.amax(d_values) - config.EPSILON)  # To avoid division by zero.
         return -y_true / d_values / len(d_values)  # The loss derivative. Normalize the gradients.
         # We normalize the gradients, so it’ll become invariant to the number of samples we calculate it for. Necessary
         # when performing the optimization process since the optimizer will sum all the gradients we do this so the
