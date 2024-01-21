@@ -1,7 +1,14 @@
 """Defines metric classes that can be used to calculate the model's performance against said metric."""
-from typing import Callable, Literal, Union
+import sys
+from typing import Union
+
 from xrnn import losses
 from xrnn import ops
+
+if sys.version_info.minor < 8:
+    from typing_extensions import Literal
+else:
+    from typing import Literal  # Literal was added to typing in python 3.8.
 
 
 class Accuracy:
@@ -19,29 +26,39 @@ class Accuracy:
         """
         self.accumulated_acc = 0
         self.accumulated_count = 0
+
         if isinstance(loss, str):
-            if loss not in ('mse', 'binary_crossentropy', 'categorical_crossentropy'):
+            if loss.lower() not in ('mse', 'binary_crossentropy', 'categorical_crossentropy'):
                 raise ValueError('`loss` must be one of "mse", "binary_crossentropy", "categorical_crossentropy".')
             loss = loss.lower()
-        self.loss = loss
-        self.acc_function = self.get_comparison_function()
+
+        if isinstance(loss, losses.CategoricalCrossentropy) or loss == 'categorical_crossentropy':
+            self.acc_function = self.categorical_accuracy
+        if isinstance(loss, losses.BinaryCrossentropy) or loss == 'binary_crossentropy':
+            self.acc_function = lambda y_true, y_pred: (y_pred > 0.5).astype(int) == y_true
+        if isinstance(loss, losses.MeanSquaredError) or loss == 'mse':
+            self.acc_function = lambda y_true, y_pred: ops.absolute(y_true - y_pred) < (ops.std(y_true) / 250)
 
     def reset_count(self) -> None:
         """Resets the accumulated accuracy and step count to start over again, called at the start of each epoch."""
         self.accumulated_acc = 0
         self.accumulated_count = 0
 
-    def get_comparison_function(self) -> Callable:
-        """Decides the function that calculates the accuracy based on the loss function and returns it."""
-        # Categorical accuracy
-        if isinstance(self.loss, losses.CategoricalCrossentropy) or self.loss == 'categorical_crossentropy':
-            return lambda y_true, y_pred: ops.argmax(y_pred, axis=1) == y_true
-        # Binary accuracy
-        if isinstance(self.loss, losses.BinaryCrossentropy) or self.loss == 'binary_crossentropy':
-            return lambda y_true, y_pred: (y_pred > 0.5).astype(int) == y_true
-        # Regression accuracy
-        if isinstance(self.loss, losses.MeanSquaredError) or self.loss == 'mse':
-            return lambda y_true, y_pred: ops.absolute(y_true - y_pred) < (ops.std(y_true) / 250)
+    @staticmethod
+    def categorical_accuracy(y_true: ops.ndarray, y_pred: ops.ndarray) -> ops.ndarray:
+        """
+        Calculates the categorical accuracy. Used to assess a classification model accuracy.
+
+        .. note::
+           This function calculates accuracy sample-wise, meaning it calculates accuracy for each sample in the batch,
+           for calculating accuracy as a number [0, 1], use `calculate`.
+        """
+        if y_true.ndim == 2:
+            if y_true.shape[1] == 1:  # If the second dimension is 1, we can get rid of it.
+                y_true = ops.squeeze(y_true)
+            else:  # if labels are one-hot encoded, convert them to a sparse array
+                y_true = ops.argmax(y_true, axis=1)
+        return ops.argmax(y_pred, axis=1) == y_true  # noqa, both are numpy arrays so the result is a bool array.
 
     def calculate(self, y_true: ops.ndarray, y_pred: ops.ndarray) -> float:
         """
@@ -52,12 +69,9 @@ class Accuracy:
         -----
         This method calculates accumulated accuracy and not step accuracy.
         """
-        if isinstance(self.loss, losses.CategoricalCrossentropy) or self.loss == 'categorical_crossentropy':
-            if y_true.ndim == 2:  # if labels are one-hot encoded, convert them to sparse.
-                y_true = ops.argmax(y_true, axis=1)
         comparisons = self.acc_function(y_true, y_pred)
         self.accumulated_acc += ops.sum(comparisons)
-        self.accumulated_count += len(comparisons)
+        self.accumulated_count += comparisons.size  # noqa, it's a numpy array Pycharm!
         return self.accumulated_acc / self.accumulated_count
 
     def __call__(self, y_true: ops.ndarray, y_pred: ops.ndarray) -> float:
