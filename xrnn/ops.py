@@ -1,12 +1,13 @@
 # pylint: skip-file
+# flake8: noqa
 """
-This module has all the names imported by `import numpy` just using its namespace (ops.ones for e.g.), It extends the
+This module has all the names imported by `import numpy` just using its namespace (ops.ones for e.g.), it extends the
 functionality of some numpy functions such as `zeros` to use the dtype defined in `config.py` by default.
  * Note that user passed arguments have the priority over the default ones.
  * Methods in `numpy.random` are available under `ops._random`.
  * `ops.random` is and instance of `~numpy.random.Generator`.
  This way the code in this package can call `ops.random` functions as it would call `numpy.random` functions but with
- the added benefit of having a separate RNG specific to it, so for example calling `numpy.random.seed(0)` won't affect
+ the added benefit of having a separate RNG specific to it, so for example, calling `numpy.random.seed(0)` won't affect
  the results generated from `ops.random` functions. Setting a seed is achieved just like numpy by calling `random.seed`.
  """
 from typing import Union
@@ -70,7 +71,7 @@ class _Random(_random.Generator):
 
         Parameters
         ----------
-        seed : {None, int, array_like[ints], SeedSequence}, optional
+        seed: {None, int, array_like[ints], SeedSequence}, optional
             A seed to initialize the `BitGenerator`. If None, then fresh,
             unpredictable entropy will be pulled from the OS. If an ``int`` or
             ``array_like[ints]`` is passed, then it will be passed to
