@@ -1,19 +1,21 @@
 """Contains DataHandler class which is used for dealing with user data. See `~DataHandler` docs for more info."""
+import sys
 from typing import Tuple, Union, Optional
+
 from xrnn import config
 from xrnn import ops
-import sys
 
 if sys.version_info.minor < 8:
     from typing_extensions import Protocol
 else:
     from typing import Protocol  # Protocol was added to typing in Python 3.8
 
-data_type_hint = Union[list, ops.ndarray]
+ArraysTypeHint = Union[list, ops.ndarray]
 
 
 class SupportsGetitem(Protocol):
     """Class That is used for annotating parameters that implement __getitem__"""
+
     def __getitem__(self: 'SupportsGetitem', item: int) -> Tuple[ops.ndarray, ops.ndarray]:
         ...
 
@@ -42,10 +44,11 @@ class DataHandler:
             The input features. In case a generator was provided, it has to define __len__ which should return the
             number of batches in the dataset, and __getitem__ which should return a tuple of two numpy arrays, the first
             one is x and the second one is y.
-        y: list or numpy array, optioanl
+        y: list or numpy array, optional
             Labels. The first axis should be the number of samples in the dataset. Should be None if `x` is a generator.
         batch_size: int
-            How many samples should each slice of the data has.
+            How many samples should each slice of the data have. If it's set to None, the whole dataset is returned per
+            iteration.
         shuffle: bool
             Whether to shuffle the data.
 
@@ -63,7 +66,7 @@ class DataHandler:
 
         Notes
         -----
-        If x and y are both numpy arrays and have a different data type than the default data type used within this
+        If both x and y are numpy arrays and have a different data type than the default data type used within this
         package (float32, which can be changed), they will be copied and cast to it increasing memory usage. To avoid
         this, cast them to the default data type before making any operation on them (like `model.train`) or change the
         default data type to match the data by calling `from xrnn import config; config.set_default_dtype(x.dtype)`
@@ -90,11 +93,12 @@ class DataHandler:
         # save them and return them only the first time we iterate over it.
         if y is None:  # A generator/iterator is (should've been) provided.
             if isinstance(x, (list, tuple, ops.ndarray)):
-                raise ValueError(
+                raise TypeError(
                     f"Only `x` was provided, and it's of type: {type(x)} not a generator/iterator object. This might "
                     f"indicate that both x and y are in the same array, for e.g. [x_train, y_train] is passed to the "
                     f"`x` argument, if this is the case, please separate them and pass them as "
-                    f"individual arrays to both `x` and `y` arguments respectively.")
+                    f"individual arrays to both `x` and `y` arguments respectively, or pass a generator that complies"
+                    f"with the documentation of the `x` parameter for generators.")
             if self.validate_generator(x):
                 self.x, self.y = x, y
         else:
@@ -109,12 +113,12 @@ class DataHandler:
         config.CREATED_OBJECTS.append(self)
 
     @property
-    def dtype(self) -> config.DTYPE_HINT:
+    def dtype(self) -> config.DtypeHint:
         """Returns the data type of the data."""
         return self._dtype
 
     @dtype.setter
-    def dtype(self, new_dtype: config.DTYPE_HINT) -> None:
+    def dtype(self, new_dtype: config.DtypeHint) -> None:
         new_dtype = config.parse_datatype(new_dtype)
         self._dtype = new_dtype
         if self.y is not None:
@@ -221,8 +225,8 @@ class DataHandler:
 
     @staticmethod
     def train_test_split(
-            x: data_type_hint, y: data_type_hint, validation_split: float
-    ) -> Tuple[data_type_hint, data_type_hint, data_type_hint, data_type_hint]:
+            x: ArraysTypeHint, y: ArraysTypeHint, validation_split: float
+    ) -> Tuple[ArraysTypeHint, ArraysTypeHint, ArraysTypeHint, ArraysTypeHint]:
         """
         A function that splits the dataset to `1 - validation_data` % training data and
         `validation_split` % validation data.
@@ -234,18 +238,23 @@ class DataHandler:
         y: list or numpy array
             labels.
         validation_split: float between (0, 1)
-            The percent of the dataset to use as validation data.
+            The percentage of the dataset to use as validation data.
 
         Returns
         -------
         split_data: tuple of four arrays
             x_train, y_train, x_test, y_test.
+
+        Raises
+        ------
+        ValueError
+            If validation_split is not between 0 and 1, if validation_split is too small or too big.
         """
         train_samples = round(len(x) * (1 - validation_split))
         err = 'The resulting number of training samples is equal to {}, this means that `validation_split` value is ' \
               'too {}, please make it {} or add more sample.'
-        if train_samples == len(x):
+        if train_samples >= len(x):
             raise ValueError(err.format('len(x)', 'small', 'bigger'))
-        if train_samples == 0:
+        if train_samples <= 0:
             raise ValueError(err.format('0', 'big', 'smaller'))
         return x[:train_samples], y[:train_samples], x[train_samples:], y[train_samples:]
