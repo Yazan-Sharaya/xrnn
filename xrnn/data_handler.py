@@ -57,31 +57,38 @@ class DataHandler:
         AttributeError
             If x is a generator that doesn't implement __getitem__ and __len__
         ValueError
-            If `y` is not provided and `x` isn't a generator, if the data isn't homogenous, if the number of samples
-            in `x` doesn't equal `y`, if `x` is a generator, and it returned only one or more than 2 arrays when called.
+            If the data isn't homogenous, if the number of samples in `x` doesn't equal `y`, if `x` is a generator,
+            and it returned only one or more than 2 arrays when called, if `validation_split` is too small or too big.
         TypeError
-            If `x` is a generator, and it didn't return numpy arrays, if it returned None or one array.
+            If `y` is not provided and `x` isn't a generator, if `x` is a generator, and it didn't return numpy arrays,
+            if it returned None or one array, if the `x` or `y` couldn't be cast to 'float32' or 'float64'.
         RuntimeError
-            If `x` is a generator and an exception was raised when trying to fetching data from it.
+            If `x` is a generator and an exception was raised when trying to fetch data from it.
+        IndexError
+            If `x` is a generator, and it returned an empty batch_x or batch_y.
 
         Notes
         -----
-        If both x and y are numpy arrays and have a different data type than the default data type used within this
-        package (float32, which can be changed), they will be copied and cast to it increasing memory usage. To avoid
-        this, cast them to the default data type before making any operation on them (like `model.train`) or change the
-        default data type to match the data by calling `from xrnn import config; config.set_default_dtype(x.dtype)`
+        * The word "generator" here is used to denote a class that implements __getitem__ and __len__ and not the
+          conventional meaning of it in Python. Used it for a lack of a better word.
+        * If both x and y are numpy arrays and have a different data type than the default data type used within this
+          package (float32, which can be changed), they will be copied and cast to it increasing memory usage. To avoid
+          this, cast them to the default data type before making any operation on them (like `model.train`) or change
+          the default data type to match the data by calling
+          `from xrnn import config; config.set_default_dtype(x.dtype)`
 
         Examples
         --------
-        from xrnn.data_handler import DataHandler
-        from xrnn import ops
-        samples = ops.random.random((2000, 128))  # 1000 random samples where each one has 128 features.
-        labels = ops.random.randint(0, 9, (2000, 1))  # 10 classes.
-        dataset = DataHandler(samples, labels, 32, True)  # batch size of 32, and shuffle set to True.
-        batch = dataset[0]  # Retrieve the batch at index 0
-        len(batch)
+        >>> samples = ops.random.random((2000, 128))  # 1000 random samples where each one has 128 features.
+        >>> labels = ops.random.integers(0, 10, (2000, 1))  # 10 classes.
+        >>> dataset = DataHandler(samples, labels, 32, True)  # batch size of 32, and shuffle set to True.
+        >>> batch = dataset[0]  # Retrieve the batch at index 0
+        >>> len(batch)
+        2
+        >>> x_batch, y_batch = batch
+        >>> len(x_batch)
         32
-        len(dataset)  # Number of batches in the dataset.
+        >>> len(dataset)  # Number of batches in the dataset.
         63
         """
         self.batch_size = batch_size
