@@ -1,3 +1,4 @@
+# pylint: skip-file
 """
 This module has all the names imported by `import numpy` just using its namespace (ops.ones for e.g.), It extends the
 functionality of some numpy functions such as `zeros` to use the dtype defined in `config.py` by default.
@@ -9,8 +10,10 @@ functionality of some numpy functions such as `zeros` to use the dtype defined i
  the results generated from `ops.random` functions. Setting a seed is achieved just like numpy by calling `random.seed`.
  """
 from typing import Union
-from xrnn import config
+
 from numpy import *
+
+from xrnn import config
 
 np_methods_to_warp = (zeros, ones, eye)
 _random = random

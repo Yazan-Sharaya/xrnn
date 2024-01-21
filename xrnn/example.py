@@ -1,9 +1,17 @@
-import urllib.request
-import urllib.error
-import numpy as np
+"""An example convolution neural network trained on MNIST."""
 import hashlib
-import shutil
 import os
+import shutil
+import urllib.error
+import urllib.request
+
+import numpy as np
+
+from xrnn import losses
+from xrnn.activations import Softmax, ReLU
+from xrnn.layers import Dense, Conv2D, Flatten, MaxPooling2D, BatchNormalization
+from xrnn.model import Model
+from xrnn.optimizers import SGD
 
 
 def load_mnist() -> np.ndarray:
@@ -59,16 +67,11 @@ def mnist_example(batch_size: int = 128, epochs: int = 1) -> None:
     Parameters
     ----------
     batch_size: int, optional
-        How many samples should each slice of the data have. A bigger number could result in faster training (up to a
+        How many samples each slice of the data should have. A bigger number could result in faster training (up to a
         point) and will also result in more memory consumption.
     epochs: int, optional
         How many full iterations over the dataset to train for.
     """
-    from xrnn.layers import Dense, Conv2D, Flatten, MaxPooling2D, BatchNormalization
-    from xrnn.activations import Softmax, ReLU
-    from xrnn.optimizers import SGD
-    from xrnn.model import Model
-    from xrnn import losses
 
     # Construct the neural network as a series of layers.
     model = Model()
@@ -83,7 +86,7 @@ def mnist_example(batch_size: int = 128, epochs: int = 1) -> None:
     model.add(Softmax())  # Used to turn the output of the last layer into probabilistic distribution for each class.
 
     # Build the network with the input shape and batch size.
-    model.build((batch_size, ) + X.shape[1:])
+    model.build((batch_size,) + X.shape[1:])
 
     # Set the optimization algorithm and loss function.
     model.set(SGD(0.01, 0.9), losses.CategoricalCrossentropy())

@@ -1,8 +1,10 @@
 import sys
+
 if sys.version_info.minor > 6:
     from contextlib import nullcontext
 else:
     from contextlib import suppress as nullcontext
+
 from xrnn import config
 from xrnn import ops
 import numpy as np
@@ -41,6 +43,6 @@ import pytest
         (ops.dtype('d'), 'float64', nullcontext())
     ]
 )
-def test_parse_datatype(dtype: config.DTYPE_HINT, expected: str, error: Exception) -> None:
+def test_parse_datatype(dtype, expected, error) -> None:
     with error:
         assert config.parse_datatype(dtype) == expected

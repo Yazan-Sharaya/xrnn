@@ -1,25 +1,25 @@
 """This module defines variables and functions that can alter the behavior of the whole package like setting/changing
-the default data type used to store arrays and perform calculations, and changing how layers that take images as input
-deal with them by calling `set_image_data_format(data_format)`."""
-import numpy.__config__ as np_config
-import numpy as np
-from typing import Union, Set
-import warnings
+the default data type used to store arrays and perform calculations, and changing how layers treat images by calling
+`set_image_data_format(data_format)`."""
 import ctypes
-import sys
 import os
+import sys
+import warnings
+from typing import Union, Set
+
+import numpy as np
+import numpy.__config__ as np_config
 
 if sys.version_info.minor < 8:
     from typing_extensions import Literal
 else:
     from typing import Literal  # Literal was added to typing in python 3.8.
 
-
-DTYPE_HINT = Union[Literal['float32', 'f', 'f4', '<f4', 'single', 'float64', 'f8', '<f8', 'double', 'float', 'd'], type]
+DtypeHint = Union[Literal['float32', 'f', 'f4', '<f4', 'single', 'float64', 'f8', '<f8', 'double', 'float', 'd'], type]
 # The default values to use across the whole package.
 EPSILON: float = 1e-7  # A good value for float32, and it's changed to 1e-14 for float64.
 IMAGE_DATA_FORMAT: Literal['channels-last', 'channels-first'] = 'channels-last'
-DTYPE: DTYPE_HINT = 'float32'
+DTYPE: DtypeHint = 'float32'
 CREATED_OBJECTS: list = []  # A list that contains all objects that should be kept track of that have been created.
 SEEN_NAMES: Set[str] = set()  # A list tracking the names that have been seen during the session.
 MKL_WARNING_MSG: str = (
@@ -32,7 +32,7 @@ MKL_WARNING_MSG: str = (
 warnings.filterwarnings('once', MKL_WARNING_MSG, ResourceWarning)
 
 
-def parse_datatype(dtype: DTYPE_HINT) -> Literal['float32', 'float64']:
+def parse_datatype(dtype: DtypeHint) -> Literal['float32', 'float64']:
     """Parses the datatype from a multitude of sources and return either 'float32' or 'float64'. This function can take
     a lot of different sources as the `dtype` argument such as numpy arrays, numpy `dtype` objects, `.dtype` property
     of numpy objects that have it, string literals, python `float`, numpy datatype objects like `np.float32` or
@@ -50,17 +50,16 @@ def parse_datatype(dtype: DTYPE_HINT) -> Literal['float32', 'float64']:
             dtype = str(dtype)
     if dtype in ('float32', 'f', 'f4', '<f4', 'single'):
         return 'float32'
-    elif dtype in ('float64', 'f8', '<f8', 'double', 'float', 'd'):
+    if dtype in ('float64', 'f8', '<f8', 'double', 'float', 'd'):
         return 'float64'
-    elif '>' in dtype:
+    if '>' in dtype:
         raise TypeError("Big endian byte order not supported.")
-    else:
-        raise TypeError(
-            f"Expected one of 'float32', 'f', 'f4', '<f4', 'single', 'float64', 'f8', '<f8', 'double', 'float', "
-            f"but got {dtype}. For a description of acceptable input arguments, look at the function documentation.")
+    raise TypeError(
+        f"Expected one of 'float32', 'f', 'f4', '<f4', 'single', 'float64', 'f8', '<f8', 'double', 'float', "
+        f"but got {dtype}. For a description of acceptable input arguments, look at the function documentation.")
 
 
-def set_default_dtype(dtype: DTYPE_HINT = 'float32') -> None:
+def set_default_dtype(dtype: DtypeHint = 'float32') -> None:
     """Set a new default data type. Changing the data type will change the dtype for all subsequent operations after
     the function call. This function should only be used once preferably before using the model (train/inference)
     because it might lead to unstable training due to rounding errors and precision loss when converting data types."""
@@ -113,10 +112,13 @@ def handle_mkl_numpy_openmp_conflict() -> None:
     conda, mainly `np.dot`. The reason this is required is that MKL uses Intel's own OpenMP library, which conflicts
     with the OpenMP implementation used in this package (MSVC or MinGW) causing OpenMP to raise an error that multiple
     copies of it are linked to the same program. This environment variable is a `workaround` to allow the program to
-    continue to execute. **Note** this can be dangerous according to the error raised by OpenMP which states the
-    following: "That is dangerous, since it can degrade performance or cause incorrect results ...
-    [setting KMP_DUPLICATE_LIB_OK=True] may cause crashes or silently produce incorrect results". But from my testing
-    it hasn't caused any of the aforementioned possible complications.
+    continue to execute.
+
+    .. note::
+       This can be dangerous, according to the error raised by OpenMP which states the following: "That is dangerous,
+       since it can degrade performance or cause incorrect results ... [setting KMP_DUPLICATE_LIB_OK=True] may cause
+       crashes or silently produce incorrect results".
+       But from my testing, it hasn't caused any of the aforementioned possible complications.
     """
     mkl_numpy_defined_variable_names = ('blas_mkl_info', 'lapack_mkl_info')
     for name in mkl_numpy_defined_variable_names:

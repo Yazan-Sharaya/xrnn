@@ -1,6 +1,6 @@
 """Defines ReLU, LeakyReLU, Softmax, Tanh and Sigmoid activation functions Layers."""
-from xrnn.layers import Layer
 from xrnn import ops
+from xrnn.layers import Layer
 
 
 class ReLU(Layer):
@@ -69,7 +69,7 @@ class Sigmoid(Layer):
     Sigmoid activation function layer. It's also called a squashing function because its range is (0, 1). Meaning the
     output of a forward pass through sigmoid is going to result in an array having values between 0 and 1 no matter
     inputs. This layer is usually as the output layer of binary classifier because its output is in the range of (0, 1)
-    so for example values < 0.5 can classified as class 1 and values greater than 0.5 as class 2.
+    so for example, values < 0.5 can be classified as class 1 and values greater than 0.5 as class 2.
     """
 
     def forward(self, inputs: ops.ndarray) -> ops.ndarray:
@@ -90,7 +90,7 @@ class Sigmoid(Layer):
 class Softmax(Layer):
     """
     Softmax activation function layer. It's usually used as the final layer of classifier network because it converts
-    the inputs into a  probability distribution of K possible outcomes, where K is the number of classes/labels.
+    the inputs into a probability distribution of K possible outcomes, where K is the number of classes/labels.
     For example, when building a CNN classifier that takes images of cats, dogs or cars and classifies them, the last
     two layers will be:
     Dense(3)  # Because there are three classes (dog, cat, car)

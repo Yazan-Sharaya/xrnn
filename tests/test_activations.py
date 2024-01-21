@@ -1,4 +1,5 @@
 import sys
+
 if sys.version_info.minor > 6:
     from contextlib import nullcontext
 else:
@@ -6,7 +7,6 @@ else:
 from xrnn import activations
 from xrnn import ops
 import pytest
-
 
 inputs = ops.random.uniform(-2, 2, (10, 10))
 
