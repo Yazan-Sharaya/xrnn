@@ -25,9 +25,9 @@ The advantages of this package over existing machine learning frameworks
 3. Lightweight in terms of size.
 4. Very fast startup time, which is the main version behind developing this project, meaning that importing the package, 
    building a network and straiting training takes less than a second (compared to `Tensorflow` for example which can take more than 10 seconds).
-5. High performance even on weak hardware, reached 90% validation accuracy on MNIST dataset using a CNN on a 2 core 2.7 GHZ cpu (i7-7500U) in 20 seconds.
+5. High performance, even on weak hardware, reached 90% validation accuracy on MNIST dataset using a CNN on a 2 core 2.7 GHZ cpu (i7-7500U) in 20 seconds.
 6. Memory efficient, uses less RAM than Tensorflow _(~25% less)_ for a full CNN training/inference pipeline.
-7. Compatibility, there's no OS specific code (OS and hardware independent), so the package can pretty much be built and run on any platform that has python >= 3.6 and any C/C++ compiler that has come out in the last 20 years.
+7. Compatibility, there's no OS-specific code (OS and hardware independent), so the package can pretty much be built and run on any platform that has python >= 3.6 and any C/C++ compiler that has come out in the last 20 years.
 
 
 Installation
@@ -37,7 +37,7 @@ Simply run the following command:
 pip install xrnn
 ```
 
-**Note** that the pre-built wheels are only provided for windows at the moment, if you want to install the package on other platforms
+**Note** that the pre-built wheels are only provided for windows at the moment, if you want to install the package on other platforms,
 see [Building From Source](#building-from-source).
 
 
@@ -52,7 +52,7 @@ number_of_samples = 1000
 height = 28
 width = 28
 channels = 3
-number_of_classes = 9  # How many classes are in the dataset, for e.g. cat, car, dog, etc.
+number_of_classes = 9  # How many classes are in the dataset, for e.g., cat, car, dog, etc.
 x_dummy = np.random.random((number_of_samples, height, width, channels))
 y_dummy = np.random.randint(number_of_classes, size=(number_of_samples, ))
 
@@ -117,7 +117,7 @@ the same interface as Keras, the only notable difference is that keras `model.fi
 
 Building From Source
 --------------------
-If you want to use the package on platform that doesn't have a pre-built wheel (which is only available for windows atm) follow these steps:
+If you want to use the package on a platform that doesn't have a pre-built wheel (which is only available for windows atm), follow these steps:
 
 1. clone the GitHub repository.
 2. navigate to the source tree where the .py and .cpp files reside.
@@ -139,7 +139,7 @@ You can ignore any warnings raised during the build process is long as it's succ
 and you are using MSVC compiler, the C source files (layer_f and layers_d) must have the .cpp extension, so they are treated as C++ source files
 because for some reason, compiling them as C source files (happens when they have .c extension) with openmp support doesn't work, but renaming the
 files to have .cpp extension (so they are treated as C++ source files) magically solves the problem, even when the source code is unchanged.
-Anyway **_it's strongly recommended_** to use [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) on windows (which was used to build the windows wheel) because it doesn't have this problem and results
+Anyway **_it's strongly recommended_** to use [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) on windows (which was used to build the Windows wheel) because it doesn't have this problem and results
 in a faster executable (~15% faster). So the whole reason for having the files as C++ source files is for compatibility with Microsoft's compiler,
 otherwise they would've been writen directly in C with no support when they are treated as C++ files (preprocessor directives and extern "C") because
 the code for the layers is written in C, so it can be called from Python using ctypes.
@@ -166,7 +166,8 @@ is prohibited, which in turn makes this machine learning framework unusable for 
 
 Project Status
 --------------
-This project is completed and currently no hold. I might be picking it up and the future and adding the following features to it:
+This project still has a long way to go, and I'm currently polishing its API.
+I might add the following features in the future:
 - Add Support for Cuda.
 - Optimize CPU performance to match the mature frameworks like Pytorch and Tensorflow.
 - Add support for automatic differentiation to make building custom layers easier.
