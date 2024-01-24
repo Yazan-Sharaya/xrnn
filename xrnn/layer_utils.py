@@ -204,7 +204,7 @@ def make_unique_name(obj: object) -> str:
     """Makes a given object name unique during a session."""
     if isinstance(obj, type):
         raise TypeError("The passed object must be initialized.")
-    name = str(type(obj)).split()[-1][1:].split('.')[-1][:-2]  # Just gets the name of the class (object).
+    name = type(obj).__name__
     identifier = 0
     for seen_name in config.SEEN_NAMES:
         if seen_name.split('_')[0] == name.split('_')[0]:
