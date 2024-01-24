@@ -1,11 +1,12 @@
 """Implements Adam, SGD, RMSprop, Adagrad optimization algorithms. Also implements the base Optimizer class the custom
 optimizers should subclass, see `~Optimizer` docstrings for more info on subclassing behaviour."""
-from typing import Callable
+from typing import Callable, TypeVar
 
 from xrnn import config
 from xrnn import ops
 
 DecayFunSig = Callable[[float, float, int, int], float]
+AnyOptimizer = TypeVar('AnyOptimizer', bound='Optimizer')
 
 
 class Optimizer:
@@ -131,6 +132,35 @@ class Optimizer:
         """Updates a layer weights and biases based on how the optimizer calculates the parameter updates."""
         raise NotImplementedError("This method must be overridden.")
 
+    def get_config(self) -> dict:
+        """Returns the optimizer configuration. It contains the current learning rate, initial learning rate, decay
+        rate, current iteration and epoch, other optimizer specific parameters like momentum for sgd for example."""
+        return {
+            'type': type(self).__name__,
+            'learning_rate': self.learning_rate,
+            'current_lr': self.current_lr,
+            'decay': self.decay,
+            'iterations': self.iterations,
+            'epoch': self.epoch
+        }
+
+    @classmethod
+    def from_config(cls, opt_config: dict) -> AnyOptimizer:
+        opt_config = opt_config.copy()
+        opt_type = opt_config.pop('type')
+        if opt_type != cls.__name__:
+            raise TypeError(
+                f"Optimizer type in config is '{opt_type}', but `from_config()` was called on optimizer of type"
+                f"{cls.__name__}.")
+        curr_lr = opt_config.pop('current_lr')
+        iterations = opt_config.pop('iterations')
+        epoch = opt_config.pop('epoch')
+        opt = cls(**opt_config)
+        opt.current_lr = curr_lr
+        opt.iterations = iterations
+        opt.epoch = epoch
+        return opt
+
 
 class SGD(Optimizer):
 
@@ -182,6 +212,11 @@ class SGD(Optimizer):
             bias_updates = -self.current_lr * layer.d_biases
         layer.weights += weight_updates
         layer.biases += bias_updates
+
+    def get_config(self) -> dict:
+        opt_config = super().get_config()
+        opt_config.update({'momentum': self.momentum})
+        return opt_config
 
 
 class Adagrad(Optimizer):
@@ -242,6 +277,11 @@ class RMSprop(Optimizer):
 
         layer.weights += -self.current_lr * layer.d_weights / (ops.sqrt(layer.weights_cache) + config.EPSILON)
         layer.biases += -self.current_lr * layer.d_biases / (ops.sqrt(layer.biases_cache) + config.EPSILON)
+
+    def get_config(self) -> dict:
+        opt_config = super().get_config()
+        opt_config.update({'rho': self.rho})
+        return opt_config
 
 
 class Adam(Optimizer):
@@ -316,3 +356,8 @@ class Adam(Optimizer):
                 ops.sqrt(weights_cache_corrected) + config.EPSILON)
         layer.biases += -self.current_lr * bias_momentum_corrected / (
                 ops.sqrt(biases_cache_corrected) + config.EPSILON)
+
+    def get_config(self) -> dict:
+        opt_config = super().get_config()
+        opt_config.update({'beta_1': self.beta_1, 'beta_2': self.beta_2})
+        return opt_config
