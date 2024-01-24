@@ -79,11 +79,49 @@ class TestOptimizer:
             opt.update_learning_rate()
             opt.iterations += 1
         assert round(opt.current_lr, 6) == expected
+        
+    def test_get_config(self):
+        opt_config = optimizers.SGD(0.2, 0.9).get_config()
+        assert len(opt_config) == 7
+        assert opt_config['learning_rate'] == 0.2
+        assert opt_config['momentum'] == 0.9
+        assert opt_config['type'] == 'SGD'
+
+    @pytest.mark.parametrize(
+        'optimizer_type, kwargs, error',
+        [
+            ('Adam', {'beta_1': 0.2}, nullcontext()),
+            ('SGD', {'momentum': 0.9}, nullcontext()),
+            ('RMSprop', {'rho': 0.}, nullcontext()),
+            ('Adagrad', {'learning_rate': 0.2}, nullcontext()),
+            ('Adam', {'Sheesh': 0.}, pytest.raises(TypeError)),
+        ]
+    )
+    def test_from_config(self, optimizer_type, kwargs, error):
+        opt_config = {
+            'learning_rate': 0.1,
+            'current_lr': 0.01,
+            'decay': 0.9,
+            'iterations': 100,
+            'epoch': 2}
+        opt_config.update(kwargs)
+        opt_config.update({'type': optimizer_type})
+        with error:
+            opt = getattr(optimizers, optimizer_type).from_config(opt_config)
+            assert opt.learning_rate == opt_config['learning_rate']
+            assert opt.current_lr == 0.01
+            assert opt.decay == 0.9
+            assert opt.iterations == 100
+            assert opt.epoch == 2
+            key, val = kwargs.popitem()
+            assert getattr(opt, key) == val
+        with pytest.raises(TypeError):
+            optimizers.Optimizer.from_config(opt_config)
 
 
 # The numbers that are checked against have been obtained after two optimization steps using Tensorflow optimizers
 # constructed with the same parameters as this package's optimizers.
-# The reason why two optimization steps are performed, is because for optimizers that use momentum or cache, the first
+# The reason why two optimization steps are performed is that for optimizers that use momentum or cache, the first
 # step is a warm-up step/initialization step, and the second one is when they actually update the weights using them.
 # The ideal way to test optimizers is to check their results against Tensorflow optimizers during testing, but having
 # Tensorflow as a dependency for running the tests is hugely inefficient.
