@@ -146,6 +146,15 @@ class Optimizer:
 
     @classmethod
     def from_config(cls, opt_config: dict) -> AnyOptimizer:
+        """
+        Create a new optimizer instance from a configuration dictionary.
+
+        Raises
+        ------
+        TypeError
+            If the optimizer's type in `opt_config` doesn't match the optimizer class `from_config()` was called on,
+            for e.g, opt_config = {'type': 'Adam', ...}; optimizer.SGD.from_config(opt_config).
+        """
         opt_config = opt_config.copy()
         opt_type = opt_config.pop('type')
         if opt_type != cls.__name__:
