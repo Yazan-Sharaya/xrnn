@@ -44,6 +44,11 @@ class ReLU(Layer):
         dlrelu[~self.relu_where] = self.alpha
         return d_values * dlrelu
 
+    def get_config(self) -> dict:
+        activation_config = super().get_config()
+        activation_config.update({'alpha': self.alpha})
+        return activation_config
+
 
 class LeakyReLU(ReLU):
 
