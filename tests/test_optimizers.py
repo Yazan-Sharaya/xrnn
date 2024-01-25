@@ -79,13 +79,23 @@ class TestOptimizer:
             opt.update_learning_rate()
             opt.iterations += 1
         assert round(opt.current_lr, 6) == expected
-        
-    def test_get_config(self):
-        opt_config = optimizers.SGD(0.2, 0.9).get_config()
-        assert len(opt_config) == 7
+
+    @pytest.mark.parametrize(
+        "opt_type, kwargs, n_elements",
+        [
+            ('SGD', {'momentum': 0.9}, 7),
+            ('Adagrad', {'decay': 0.3}, 6),
+            ('RMSprop', {'rho': 0.5}, 7),
+            ('Adam', {'beta_2': 0.5}, 8),
+        ]
+    )
+    def test_get_config(self, opt_type, kwargs, n_elements):
+        opt_config = getattr(optimizers, opt_type)(0.2, **kwargs).get_config()
+        assert len(opt_config) == n_elements
         assert opt_config['learning_rate'] == 0.2
-        assert opt_config['momentum'] == 0.9
-        assert opt_config['type'] == 'SGD'
+        key, value = kwargs.popitem()
+        assert opt_config[key] == value
+        assert opt_config['type'] == opt_type
 
     @pytest.mark.parametrize(
         'optimizer_type, kwargs, error',
