@@ -1,20 +1,15 @@
 """Defines metric classes that can be used to calculate the model's performance against said metric."""
-import sys
 from typing import Union
 
 from xrnn import losses
 from xrnn import ops
 
-if sys.version_info.minor < 8:
-    from typing_extensions import Literal
-else:
-    from typing import Literal  # Literal was added to typing in python 3.8.
-
 
 class Accuracy:
 
     def __init__(
-            self, loss: Union[Literal['mse', 'binary_crossentropy', 'categorical_crossentropy'], losses.Loss]) -> None:
+            self, loss: Union[ops.config.Literal[
+                'mse', 'binary_crossentropy', 'categorical_crossentropy'], losses.Loss]) -> None:
         """
         Measures the model accumulated accuracy.
 
