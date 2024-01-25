@@ -160,7 +160,7 @@ class DataHandler:
                     'The generator returned only one value. It should return two arrays instead. This probably '
                     'happened because the generator returned an iterable (for e.g. a numpy array) containing only one '
                     'value.') from e
-            elif str(e) == 'too many values to unpack (expected 2)':
+            if str(e) == 'too many values to unpack (expected 2)':
                 raise ValueError(
                     "The generator returned more than two values. It should only return batch_x, batch_y.") from e
             raise e
