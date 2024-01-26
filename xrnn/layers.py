@@ -410,8 +410,6 @@ class Dense(Layer):
         """
         super().__init__(weight_l2, bias_l2, weight_initializer, bias_initializer)
         self.neurons = neurons
-        self.weight_initializer = weight_initializer
-        self.bias_initializer = bias_initializer
 
         self.expected_dims = 2
         self.weights = None
@@ -520,7 +518,7 @@ class SpatialLayer(Layer):
     @property
     def nhwc(self) -> bool:
         """Returns True if the current image data format is NHWC (channels-last) and False if NCHW (channels-first)"""
-        return True if config.IMAGE_DATA_FORMAT == 'channels-last' else False
+        return config.IMAGE_DATA_FORMAT == 'channels-last'
 
     def compute_output_shape(self, input_shape: tuple) -> tuple:
         padding_dims = self.calculate_padding_amount(input_shape)
@@ -535,8 +533,6 @@ class SpatialLayer(Layer):
 
     def to_nhwc_format(self, shape: tuple) -> tuple:
         """Returns the shape in NHWC format if it's in NCHW format only, otherwise return it unchanged."""
-        if len(shape) != 4:
-            raise ValueError('`shape` must be a tuple of length 4.')
         if not self.nhwc:
             return shape[0], shape[2], shape[3], shape[1]
         return shape
@@ -702,12 +698,12 @@ class Pooling2D(SpatialLayer):
         if mode not in ('max', 'avg'):
             raise ValueError(f"Mode must either be 'max' or 'avg'. Got '{mode}'")
         self.masks = None
-        self.use_max = True if mode == 'max' else False
+        self.use_max = mode == 'max'
         self.expected_dims = 4
 
     def forward(self, inputs: ops.ndarray) -> ops.ndarray:
         feature_maps = ops.zeros(self.output_shape)
-        self.masks = ops.zeros(inputs.shape)
+        self.masks = ops.zeros(self.padded_input_shape)
         args = (inputs, self.masks, feature_maps) if self.use_max else (inputs, feature_maps)
         args = self.make_arguments_list(*args)
         if self.dtype == 'float32':
@@ -853,7 +849,6 @@ class BatchNormalization(Layer):
         for i in range(len(self.axis)):
             if self.axis[i] < 0:  # Handle end-relative (negative) axis.
                 self.axis[i] = n_dims + self.axis[i]  # Get absolute axis.
-        self.axis = tuple(self.axis)  # Convert it back to tuple because numpy doesn't support a {list} of axis.
         return tuple([i for i in range(n_dims) if i not in self.axis])
 
     def build(self, input_shape: Union[int, tuple], activation: str = None) -> None:
@@ -879,8 +874,6 @@ class BatchNormalization(Layer):
         return self.momentum * moving + (1 - self.momentum) * new_sample
 
     def forward(self, inputs: ops.ndarray) -> ops.ndarray:
-        if not self.reduction_axis:
-            self.reduction_axis = self.get_reduction_axis(self.input_shape)
         if self.training:
             mean = inputs.mean(self.reduction_axis, keepdims=True)
             variance = inputs.var(self.reduction_axis, keepdims=True) + config.EPSILON
@@ -990,6 +983,16 @@ class BatchNormalization(Layer):
                     f"Shape mismatch for '{layer_param}', current shape is {getattr(self, layer_param).shape}, got "
                     f"{new_param.shape} new shape")
             setattr(self, layer_param, new_param)
+
+    def get_config(self) -> dict:
+        layer_config = super().get_config()
+        layer_config.update({'axis': self.axis, 'momentum': self.momentum})
+        for key in layer_config.copy():
+            val = layer_config.pop(key)
+            key = key.replace('weight', 'gamma')
+            key = key.replace('bias', 'beta')
+            layer_config[key] = val
+        return layer_config
 
 
 class Flatten(Layer):
