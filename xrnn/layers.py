@@ -415,17 +415,25 @@ class Dense(Layer):
         self.weights = None
         self.biases = None
         self.built = False
+        self.input_dim = input_dim
         if input_dim:
             if self.weight_initializer != 'auto':
                 self.build(input_dim)
 
-    def build(self, input_shape: Union[int, tuple], activation: str = None) -> None:
+    def build(self, input_shape: Optional[Union[int, tuple]] = None, activation: Optional[str] = None) -> None:
         if self.built:
             raise ValueError('A layer can only be built once.')
-        input_d = input_shape[-1] if isinstance(input_shape, tuple) else input_shape
+        if input_shape:  # Prioritize input_shape passed to build.
+            input_d = input_shape[-1] if isinstance(input_shape, tuple) else input_shape
+        else:
+            if not self.input_dim:
+                raise ValueError(
+                    'Either `input_dim` passed to the constructor or `input_shape` passed to `build` must be provided.')
+            input_d = self.input_dim
         self.weights = self.get_initialization_function(self.weight_initializer, activation)((input_d, self.units))
         self.biases = self.initialize_biases(activation)
         self.built = True
+        self.input_shape = input_shape
 
     @property
     def units(self) -> int:
@@ -868,6 +876,7 @@ class BatchNormalization(Layer):
         self.moving_mean = ops.zeros(arrays_shape)
         self.moving_var = ops.ones(arrays_shape)
         self.built = True
+        self.input_shape = input_shape
 
     def calculate_moving_average(self, moving: ops.ndarray, new_sample: ops.ndarray) -> ops.ndarray:
         """Calculates the moving average and updates it."""
