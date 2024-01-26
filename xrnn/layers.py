@@ -18,12 +18,15 @@ Defines two types of layers:
         6. `Dense`.
         7. `Dropout`.
 """
-from typing import Union, Callable, Tuple, Optional
 from functools import partial
-from xrnn import layer_utils
+from typing import Union, Callable, Optional, List, TypeVar
+
 from xrnn import c_layers
 from xrnn import config
+from xrnn import layer_utils
 from xrnn import ops
+
+AnyLayer = TypeVar('AnyLayer', bound='Layer')
 
 
 class Layer:
@@ -50,7 +53,7 @@ class Layer:
             be passed to the `build` method, if not, `xavier` initialization method is used. Available activation
             function (names) are: 'relu', 'sigmoid', 'tanh' and 'softmax'.
         bias_initializer: str
-            How to initialize the biases. Default method is an array full of zeros. Support the same arguments as
+            How to initialize the biases. The Default method is an array full of zeros. Support the same arguments as
             `weight_initializer`.
 
         Notes
@@ -69,24 +72,24 @@ class Layer:
          5. biases (attribute): Same as weights.
          6. forward (method): takes a numpy array as input, performs the calculation on it, and returns a numpy array as
             an output. *Note* that this method should implement the logic of your layer only, data type casting,
-            variable batch size, and saving the inputs array are accounted for automatically. If you need to save other
+            variable batch size, and saving the input array are accounted for automatically. If you need to save other
             intermediate results that will be used during the backward pass, you can check if the layer is in training
             mode by checking for `self.training` and saving them.
          7. backward (method): takes the gradients calculated w.r.t from the layer proceeding it, and should calculate
             the gradients w.r.t its weights (save it in self.d_weights) and biases (save it in self.d_biases) if it has
             them, and w.r.t to the input of the layer and return that. Note that weight and biases l2 regularization is
-            already implemented in this base layer and all you need to do if you want to support them is to call
-            `self.apply_l2_gradients()` after calculating `d_weights` and `d_biases` if your layer have those.
-         8. set_parameters (method): Optional, implement the logic to check if the passed weights and biases are
-            compatible with how the layer weights' and biases' should look like, then call `super().set_parameters` to
-            set them.
+            already implemented in this base layer, and all you need to do if you want to support them is to call
+            `self.apply_l2_gradients()` after calculating `d_weights` and `d_biases` if your layer has those.
+         8. set_params and get_params (method): Optional, only needed if your layer supports parameters other than
+            weights and biases, or if you need custom logic to verify that the passed params are compatible with your
+            layer.
          9. expected_dims (attribute): The expected number of dimensions that the layer expects the inputs to have. Only
-            needed when the layer have a restriction over the shape of the input, otherwise don't define it.
+            needed when the layer has a restriction over the shape of the input, otherwise don't define it.
          * For a minimal working example, see `Dense` for creating a trainable layer by subclassing `Layer`, and
            `Dropout` for a non-trainable layer example.
 
-        If your layer deal with image inputs and changes their spatial dimensions, consider subclassing `SpatialLayer`
-        instead because auto handles for different image formats and parameter checking. The aforementioned points apply
+        If your layer deals with image inputs and changes their spatial dimensions, consider subclassing `SpatialLayer`
+        instead because it handles different image formats and does parameter checking. The aforementioned points apply
         to it too.
         """
 
@@ -118,7 +121,17 @@ class Layer:
         self._name = layer_utils.make_unique_name(self)
 
     @property
-    def name(self):  # Makes the name unchangeable.
+    def name(self) -> str:  # Makes the name unchangeable.
+        """
+        Return the name of the layer. The name of the layer consists of two parts, the layer's type and its index.
+
+        Examples
+        --------
+        >>> Conv2D(16, 3).name
+        'Conv2D_0'
+        >>> Conv2D(16, 3).name
+        'Conv2D_1'
+        """
         return self._name
 
     @property
@@ -176,8 +189,7 @@ class Layer:
         curr_input_shape = inputs.shape
         if self.built is False:
             self.build(curr_input_shape)
-        if not self.input_shape:  # For when the layer isn't built, but its params exist like when calling
-            # `set_parameters()` without calling `build()`.
+        if not self.input_shape:  # If a custom-defined layer doesn't save the input_shape passed to its build method.
             self.input_shape = curr_input_shape
         else:
             if self.input_shape[1:] != curr_input_shape[1:]:  # Variable input shape, not supported.
@@ -185,7 +197,7 @@ class Layer:
                     f"Variable input shape is not supported. The layer was originally built with shape "
                     f"(batch_size, {self.input_shape[1:]}), but inputs shape is: (batch_size, {curr_input_shape[1:]}).")
             if self.input_shape[0] != curr_input_shape[0]:  # Variable batch size.
-                self.input_shape = (curr_input_shape[0], ) + self.input_shape[1:]
+                self.input_shape = (curr_input_shape[0],) + self.input_shape[1:]
         if inputs.dtype != self.dtype:
             inputs = inputs.astype(self.dtype)
         if getattr(self, 'padding', None) == 'same':
@@ -225,7 +237,7 @@ class Layer:
             A sting indicating the initialization method name. Allowed methods are: 'zeros', 'ones',
             'standard_normal', 'xavier' `(aka Glorot Uniform)`, 'he' `(aka Kaiming)`, 'auto'. If the method is set
             to 'auto', then the initialization function is determined by the activation function. If the activation is
-            'relu', the method is set `fan in`, otherwise `fan out` method is used.
+            'relu', `he` initialization method is used, otherwise `xaviar` method is used.
         activation: {'relu', 'tanh', 'sigmoid', 'softmax'}, optional
             A string indicating the layer activation function. Only needed if `method` is set to `auto`.
 
@@ -234,15 +246,22 @@ class Layer:
         init_func: function
             Initialization function the takes `input_shape` and returns an array of weights with the same shape.
 
+        Raises
+        ------
+        ValueError
+            If `method` is not one of the supported methods, if `activation` is not one of the supported activations and
+            `method` is set to 'auto'.
+
         References
         ----------
         .. [1] https://proceedings.mlr.press/v9/glorot10a/glorot10a.pdf
         .. [2] https://arxiv.org/pdf/1502.01852.pdf
         """
+
         def uniform_init(input_shape: tuple, mode: str = 'fan_avg') -> ops.ndarray:
             """Returns a numpy function to initialize the weights using a method based on `mode`.
             If `mode` is set to 'fan_in' it uses 'He` method, if it's set to 'fan_avg' it uses `Xavier` method."""
-            shape = input_shape if len(input_shape) == 2 else input_shape[-2:]  # conv kernel.
+            shape = input_shape if len(input_shape) == 2 else input_shape[1:3]  # conv kernel.
             if mode == 'fan_in':
                 scale = shape[0]
             elif mode == 'fan_avg':
@@ -251,6 +270,7 @@ class Layer:
                 scale = input_shape[1]
             limit = ops.sqrt(6. / scale)
             return ops.random.uniform(-limit, limit, input_shape)
+
         method = method.lower()
         activation = activation.lower() if activation else activation
         allowed_methods = ('zeros', 'ones', 'standard_normal', 'xavier', 'he', 'auto')
@@ -338,10 +358,10 @@ class Layer:
         if self.bias_l2:
             self.d_biases += self.bias_l2 * 2 * getattr(self, 'biases')
 
-    def initialize_biases(self, activation: str = None):
-        """A method to initialize the layers biases. Every layer can call this method since the way biases are
+    def initialize_biases(self, activation: str = None) -> Callable[[tuple], ops.ndarray]:
+        """A method to initialize the layer's biases. Every layer can call this method since the way biases are
         initialized is the same across all layers."""
-        return self.get_initialization_function(self.bias_initializer, activation)((self.units, ))
+        return self.get_initialization_function(self.bias_initializer, activation)((self.units,))
 
     def __repr__(self):
         return self.name
@@ -406,7 +426,7 @@ class Dense(Layer):
         return input_shape[0], self.units
 
     def forward(self, inputs: ops.ndarray) -> ops.ndarray:
-        output = ops.dot(inputs, self.weights) + self.biases[ops.newaxis, ]
+        output = ops.dot(inputs, self.weights) + self.biases[ops.newaxis,]
         return output
 
     def backward(self, d_values: ops.ndarray) -> ops.ndarray:
@@ -428,7 +448,7 @@ class Dropout(Layer):
         Parameters
         ----------
         rate: float
-            Percentage of neurons to disable. This value should be between 0 and 1.
+            Percentage of neurons to disable. This value should be between zero and 1.
         """
         super().__init__()
         if not 0 <= rate <= 1:
@@ -644,6 +664,8 @@ class Pooling2D(SpatialLayer):
             strides: Optional[Union[tuple, int]] = 1,
             padding: config.Literal['same', 'valid'] = 'valid',
             mode: config.Literal['max', 'avg'] = None) -> None:
+        """Base class for MaxPooling2D and AvgPooling2D. The implementation of both is almost identical, the only
+        Difference is how the results are calculated, which can be dictated by `mode` argument, 'max' or 'avg'."""
         super().__init__(pool_size, strides, padding)
         if mode not in ('max', 'avg'):
             raise ValueError(f"Mode must either be 'max' or 'avg'. Got '{mode}'")
@@ -680,6 +702,23 @@ class MaxPooling2D(Pooling2D):
             pool_size: Union[tuple, int],
             strides: Optional[Union[tuple, int]] = 1,
             padding: config.Literal['same', 'valid'] = 'valid') -> None:
+        """
+        Max pooling operation for 2D spatial data like images. It performs a max operation over a window for each
+        channel of the inputs, down sampling the spatial dimensions in the process.
+
+        Parameters
+        ----------
+        pool_size: int, tuple
+            The window height and width to perform the max operation on. If integer, it's used for both window height
+            and width.
+        strides: int, tuple, optional
+            How far the pooling window moves each step. If integer, the window will slide by this factor for height and
+            width. Default is 1.
+        padding: str, optional
+            Either 'same' or 'valid'. 'valid' applies no padding to the input. 'same' evenly pads the spatial dimensions
+            of the input such that the output has the same height and width when `strides=1`, otherwise spatial
+            dimensions // strides. Default is valid
+        """
         super().__init__(pool_size, strides, padding, 'max')
 
 
@@ -689,6 +728,23 @@ class AvgPooling2D(Pooling2D):
             pool_size: Union[tuple, int],
             strides: Optional[Union[tuple, int]] = 1,
             padding: config.Literal['same', 'valid'] = 'valid') -> None:
+        """
+        Average pooling operation for 2D spatial data like images. It downsamples the input by taking the average over a
+        window (dictated by `pool_size`) for each input channel.
+
+        Parameters
+        ----------
+        pool_size: int, tuple
+            The window height and width to take the average over. If integer, it's used for both window height
+            and width.
+        strides: int, tuple, optional
+            How far the pooling window moves each step. If integer, the window will slide by this factor for height and
+            width. Default is 1.
+        padding: str, optional
+            Either 'same' or 'valid'. 'valid' applies no padding to the input. 'same' evenly pads the spatial dimensions
+            of the input such that the output has the same height and width when `strides=1`, otherwise spatial
+            dimensions // strides. Default is valid
+        """
         super().__init__(pool_size, strides, padding, 'avg')
 
 
@@ -740,24 +796,24 @@ class BatchNormalization(Layer):
         self.built = False
 
     def get_reduction_axis(self, n_dims: int) -> tuple:
-        """Returns a tuple of the axis(es) to perform the mean and variance calculation on. For instance the given axis
-        is -1 and data format is `channels-last` this gives (0, 1, 2) reduction axis.
+        """Returns a tuple of the axis(es) to perform the mean and variance calculation on. For instance, the given axis
+        is -1, and data format is `channels-last` this gives (0, 1, 2) reduction axis.
 
         Parameters
         ----------
         n_dims: int
-            How many dimensions that input is expected to have, for e.g. it should be 4 for image inputs.
+            How many dimensions that the input is expected to have, for e.g., it should be 4 for image inputs.
         """
         if n_dims not in (2, 4):
             raise ValueError(f"`n_dims` must be either 2 or 4. Got {n_dims}")
         if isinstance(self.axis, (list, tuple)) and len(self.axis) == n_dims:
             raise ValueError(
-                f"`axis` can't have the same number of axes as `n_dims`, this will result in reducing the output to a "
-                f"scaler value, which isn't supported and probably not what you intended.")
+                "`axis` can't have the same number of axes as `n_dims`, this will result in reducing the output to a "
+                "scaler value, which isn't supported and probably not what you intended.")
         if not self.axis:
             self.axis = -1 if config.IMAGE_DATA_FORMAT == 'channels-last' or n_dims == 2 else 1
         if not isinstance(self.axis, list):
-            # Convert it to a list to be able to assign values to it (tuples are mutable and ints are not iterable).
+            # Convert it to a list to be able to assign values to it (tuples are mutable, and ints are not iterable).
             if isinstance(self.axis, int):
                 self.axis = [self.axis]
             else:
