@@ -135,18 +135,18 @@ class Layer:
         return self._name
 
     @property
-    def dtype(self) -> config.DTYPE:
+    def dtype(self) -> config.DtypeHint:
         """Returns a string representing the data type of the layer. e.g. 'float32'."""
         return self._dtype
 
     @dtype.setter
-    def dtype(self, new_dtype: config.DTYPE_HINT):
+    def dtype(self, new_dtype: config.DtypeHint):
         new_dtype = config.parse_datatype(new_dtype)
         self._dtype = new_dtype
-        for attribute_name in self.__dict__.keys():
+        for attribute_name in self.__dict__:
             attribute = getattr(self, attribute_name)
             if isinstance(attribute, ops.ndarray):
-                if attribute.dtype != new_dtype:
+                if attribute.dtype not in (new_dtype, bool):
                     setattr(self, attribute_name, attribute.astype(new_dtype, 'C'))
 
     def compute_output_shape(self, input_shape: tuple) -> tuple:
