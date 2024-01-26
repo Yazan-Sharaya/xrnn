@@ -296,59 +296,6 @@ class Layer:
         """Builds/initialises the layer weights and biases based on the specified input shape."""
         raise NotImplementedError("This method must be overriden.")
 
-    def get_parameters(self, copy: bool = True) -> Tuple[ops.ndarray, ops.ndarray]:
-        """Returns a copy of the layer's weights' and biases'. Set `copy` to False if you want to be able to modify the
-        parameters outside the layer but still want to the changes to be reflected on the layer's behavior."""
-        if hasattr(self, 'weights'):
-            weights = getattr(self, 'weights')
-            biases = getattr(self, 'biases')
-            if weights is None:
-                raise ValueError(
-                    "The weights and biases haven't been initialized yet. Call `build` method to initialize them.")
-            if copy:
-                return weights.copy(), biases.copy()
-            return weights, biases
-        raise ValueError(f"Layer of type: {type(self)} doesn't have weights or biases.")
-
-    def set_parameters(self, weights: ops.ndarray, biases: ops.ndarray, copy: bool = True) -> None:
-        """sets the layer's weights' and biases'. Set `copy` to False if you want any further tweaks to the passed
-        variables to also affect the layer's state."""
-        if hasattr(self, 'weights'):
-            # Copy the values so any further tweaks done to them from outside the model aren't reflected on the model.
-            if copy:
-                weights = weights.copy()
-                biases = biases.copy()
-            built = getattr(self, 'built')
-            if built:
-                if self.weights.shape == weights.shape:  # Check if current weights shape matches the new one.
-                    setattr(self, 'weights', weights)
-                    if getattr(self, 'biases').shape != biases.shape:
-                        raise ValueError(
-                            f'Biases shape mismatch, biases should have shape of {getattr(self, "biases").shape}. '
-                            f'Got {biases.shape}.')
-                    setattr(self, 'biases', biases)
-                else:
-                    raise ValueError(
-                        f"The layer is already built and current weights shape: {self.weights.shape} doesn't match the "
-                        f"provided weights shape: {weights.shape}")
-            else:
-                try:
-                    # First one checks if it's a Dense layer, the second one checks if it's a Conv2D layer.
-                    # if self.units == weights.shape[-1] or self.units == weights.shape[0]:
-                    setattr(self, 'weights', weights)
-                    setattr(self, 'biases', biases)
-                    setattr(self, 'built', True)  # To not build the layer again and reinitialize the weights.
-                    # else:
-                    #     raise ValueError(
-                    #         f"Shape mismatch, layer weights should have {self.units} units in their last dimension. "
-                    #         f"Got weights with {weights.shape[-1]} units in their last dimension instead.")
-                except NotImplementedError:  # Weights and biases haven't been initialized yet (set to None).
-                    setattr(self, 'weights', weights)
-                    setattr(self, 'biases', biases)
-                    setattr(self, 'built', True)  # To not try to build the layer again and reinitialize the weights.
-        else:
-            raise ValueError(f"Layer of type {type(self)} doesn't have weights or biases.")
-
     def apply_l2_gradients(self) -> None:
         """Calculates the partial derivative (gradients) of l2 regularization w.r.t weights and biases and applies them
         to the derived weights and biases."""
@@ -363,7 +310,73 @@ class Layer:
         initialized is the same across all layers."""
         return self.get_initialization_function(self.bias_initializer, activation)((self.units,))
 
-    def __repr__(self):
+    def get_params(self, copy: Optional[bool] = True) -> List[ops.ndarray]:
+        """
+        Returns a list containing the layer weights and biases.
+
+        Parameters
+        ----------
+        copy: bool, optional
+            Whether to copy the returned parameters. If False, any user changes to the weights and biases will
+            affect the layer's weights and biases, so it's preferred to keep `copy` set to True to avoid any unintended
+            behaviour caused by user code. Defaults to True
+
+        Returns
+        -------
+        params: list
+            A tuple containing (weights, biases, moving_mean, moving_var).
+
+        Raises
+        ------
+        ValueError
+            If the method was called on a layer that doesn't have weights or biases like a `Flatten` layer, if
+            `get_params()` is called before the layer was built.
+        """
+        if self.built is None:
+            raise TypeError(f"Layer of type {type(self)} doesn't have weights nor biases.")
+        if self.built is False:
+            raise ValueError("The layer must be built before calling `get_params()`.")
+        params = [getattr(self, 'weights'), getattr(self, 'biases')]
+        if copy:
+            params = list(map(ops.copy, params))
+        return params
+
+    def set_params(self, params: Union[tuple, list]) -> None:
+        """
+        Sets the layer's parameters (weights and biases) to the new params.
+
+        Parameters
+        ----------
+        params: list, tuple
+            List of parameters to set, can have one element to set only the weights, or two to set weights and biases.
+
+        Raises
+        ------
+        ValueError
+            If one or more of the arrays in `params` shape doesn't match its respective layer parameter array shape, if
+            the function was called before the layer was built, if `params` is empty.
+        TypeError
+            If `params` isn't a tuple or list, if the layer doesn't have weights or biases like MaxPooling2D, if the
+            elements of `params` aren't numpy arrays.
+        """
+        if self.built is None:
+            raise TypeError(f"Layer of type {type(self)} doesn't have weights nor biases.")
+        if self.built is False:
+            raise ValueError('The layer must be built before calling `set_params()`.')
+        if not isinstance(params, (list, tuple)):
+            raise TypeError(f"`params` must be a list or tuple. Got {type(params)}")
+        if not len(params):
+            raise ValueError('`params` can not be an empty list, it must contain at least one element.')
+        for layer_param, new_param in zip(('weights', 'biases'), params):
+            if not isinstance(new_param, ops.ndarray):
+                raise TypeError(f"`params` contents must be numpy arrays. Got {type(new_param)}.")
+            if getattr(self, layer_param).shape != new_param.shape:
+                raise ValueError(
+                    f"Shape mismatch for '{layer_param}', current shape is {getattr(self, layer_param).shape}, got "
+                    f"{new_param.shape} new shape.")
+            setattr(self, layer_param, new_param)
+
+    def __repr__(self) -> str:
         return self.name
 
 
@@ -595,18 +608,6 @@ class Conv2D(SpatialLayer):
         self.biases = None
         self.built = False
 
-    def set_parameters(self, weights: ops.ndarray, biases: ops.ndarray, copy: bool = True, keras: bool = False) -> None:
-        """Sets the layer kernels (weights) and biases. The weights should have shape (n_kernels, kernel_height,
-        kernel_width, in_channels). So for example, if the kernel height and kernel width are equal to 3, the number
-        of kernels are 16, and the input channels are equal to 64, the shape of the weights should be (16, 3, 3, 64).
-        bias is of shape -> (n_filters, ). Set `keras` parameter to True if """
-        if weights.ndim != 4:
-            raise ValueError('weights should be a four dimensional numpy array.')
-        if keras:
-            # Keras' weights are of shape (kernel_height, kernel_width, in_channels, n_kernels)
-            weights = ops.ascontiguousarray(weights.transpose((3, 0, 1, 2)))
-        super().set_parameters(weights, biases, copy)
-
     @property
     def weights(self) -> ops.ndarray:
         """A property that returns the kernels of the layer which is the same as weights but is named kernels because
@@ -654,6 +655,37 @@ class Conv2D(SpatialLayer):
         d_inputs = layer_utils.extract_from_padded(d_inputs, self.padding_amount)
         self.apply_l2_gradients()
         return d_inputs
+
+    def set_params(self, params: Union[list, tuple], keras_weights: Optional[bool] = False) -> None:
+        """
+        Sets the layer's parameters (weights and biases) to the new params.
+
+        Parameters
+        ----------
+        params: list, tuple
+            List of parameters to set, can have one element to set only the weights, or two to set weights and biases.
+        keras_weights: bool, optional
+            Whether the weights came from a keras layer. This needs to be explicitly satated because keras Conv2D layer
+            weights' (kernel) has a different shape from this layer weights' (kernel). Defaults to False
+
+        Raises
+        ------
+        ValueError
+            If one or more of the arrays in `params` shape doesn't match its respective layer parameter array shape, if
+            the function was called before the layer was built.
+        TypeError
+            If `params` isn't a tuple or list.
+        """
+        if keras_weights:
+            params = [params[0].transpose(3, 0, 1, 2)]
+            if len(params) == 2:
+                params.append(params[1])
+        super().set_params(params)
+
+    def get_config(self) -> dict:
+        layer_config = super().get_config()
+        layer_config.update({'kernels': self.n_kernels})
+        return layer_config
 
 
 class Pooling2D(SpatialLayer):
@@ -888,6 +920,76 @@ class BatchNormalization(Layer):
         self.d_biases = ops.sum(d_values, self.reduction_axis, keepdims=True)
         self.apply_l2_gradients()
         return d_norm * stddev_inv + d_variance * xmm2 + d_mean / m
+
+    def get_params(self, copy: Optional[bool] = True, squeeze: Optional[bool] = False) -> List[ops.ndarray]:
+        """
+        Returns a list containing the weights (gamma), biases (beta), moving mean and moving variance arrays
+        respectively.
+
+        Parameters
+        ----------
+        copy: bool, optional
+            Whether to copy the returned parameters. If False, any user changes to the weights and biases will
+            affect the layer's weights and biases, so it's preferred to keep `copy` set to True to avoid any unintended
+            behaviour caused by user code. Defaults to True
+        squeeze: bool, optional
+            Whether to remove excess axes of length 1. This might be useful if you want to pass the parameters to a
+            keras layer since keras BatchNorm parameters don't have extra empty dimensions. Defaults to False
+
+        Returns
+        -------
+        params: list
+            A tuple containing (weights, biases, moving_mean, moving_var).
+
+        Raises
+        ------
+        ValueError
+            If `get_params()` is called before the layer is built.
+        """
+        if not self.built:
+            raise ValueError("The layer must be built before calling `get_params()`.")
+        params = [self.weights, self.biases, self.moving_mean, self.moving_var]
+        if copy:
+            params = list(map(ops.copy, params))
+        if squeeze and self.weights is not None and self.weights.shape.count(1) == 3:  # Only remove (1) dims
+            params = list(map(ops.squeeze, params))
+        return params
+
+    def set_params(self, params: Union[tuple, list]) -> None:
+        """
+        Sets the layer's parameters using `params`. The layer must be built before calling this method, either by
+        calling the layer `layer(inputs)` or by calling `layer.build(input_shape)`
+
+        Parameters
+        ----------
+        params: tuple, list
+            A tuple containing (weights, biases, moving_mean, moving_var). Alternatively, you can pass a subset of
+            the parameters, for e.g., (weights, biases), will only set the layer weights' and biases'.
+
+        Raises
+        ------
+        ValueError
+            If one or more of the arrays in `params` shape doesn't match its respective layer parameter array shape, if
+            the function was called before the layer was built, if `params` is empty.
+        TypeError
+            If `params` isn't a tuple or list, if the elements of `params` aren't numpy arrays.
+        """
+        if not self.built:
+            raise ValueError('The layer must be built before calling `set_params()`.')
+        if not isinstance(params, (list, tuple)):
+            raise TypeError(f"`params` must be a list or tuple. Got {type(params)}")
+        if not len(params):
+            raise ValueError('`params` can not be an empty list, it must contain at least one element.')
+        for layer_param, new_param in zip(('weights', 'biases', 'moving_mean', 'moving_var'), params):
+            if not isinstance(new_param, ops.ndarray):
+                raise TypeError(f"`params` contents must be numpy arrays. Got {type(new_param)}.")
+            if new_param.ndim == 1:
+                new_param = ops.expand_dims(new_param, list(ops.where(ops.array(self.weights.shape) == 1)[0]))
+            if getattr(self, layer_param).shape != new_param.shape:
+                raise ValueError(
+                    f"Shape mismatch for '{layer_param}', current shape is {getattr(self, layer_param).shape}, got "
+                    f"{new_param.shape} new shape")
+            setattr(self, layer_param, new_param)
 
 
 class Flatten(Layer):
