@@ -205,8 +205,6 @@ class Model:
         else:
             d_inputs = self.loss.backward(y_true, y_pred)
             layers_to_backward = self.layers[::-1]
-        # Only calculate gradients for trainable layers.
-        layers_to_backward = [layer for layer in layers_to_backward if layer.training]
         return reduce(
             lambda x, layer_backward: layer_backward(x), [layer.backward for layer in layers_to_backward], d_inputs)
 
