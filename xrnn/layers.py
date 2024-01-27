@@ -379,6 +379,63 @@ class Layer:
     def __repr__(self) -> str:
         return self.name
 
+    def get_config(self) -> dict:
+        """Return layer configuration. A layer's configuration contains the dtype of the layer, its training mode,
+        dtype, input shape if defined, and the arguments used to create it."""
+        layer_config = {'type': type(self).__name__, 'training': self.training, 'dtype': self.dtype}
+        if self.input_shape:
+            layer_config.update({'input_shape': self.input_shape})
+        if self.built is not None:
+            layer_config.update({
+                'weight_l2': self.weight_l2,
+                'bias_l2': self.bias_l2,
+                'weight_initializer': self.weight_initializer,
+                'bias_initializer': self.bias_initializer})
+        return layer_config
+
+    @classmethod
+    def from_config(cls, layer_config: dict, build_if_can: Optional[bool] = False) -> AnyLayer:
+        """
+        Creates an instance of the given layer from the given config.
+
+        Parameters
+        ----------
+        layer_config: dict
+            A dictionary containing the layer's configuration, usually obtained from `layer.get_config()`.
+        build_if_can: bool, optional
+            Whether to build the created layer if input_shape was defined in the config. Defaults to False.
+
+        Returns
+        -------
+        layer: Layer
+            The created layer instance.
+
+        Raises
+        ------
+        TypeError
+            If the layer's type in `layer_config` doesn't match the layer class `from_config()` was called on, for e.g.,
+            layer_config = {'type': 'Dense', ...}; layers.Conv2D.from_config(layer_config).
+        """
+        layer_config = layer_config.copy()
+        layer_type = layer_config.pop('type')
+        if layer_type != cls.__name__:
+            raise TypeError(
+                f"Layer type in config is {layer_type}, but `from_config()` was called on a layer of type"
+                f"{cls.__name__}.")
+        dtype = layer_config.pop('dtype')
+        training = layer_config.pop('training')
+        input_shape = layer_config.pop('input_shape', None)
+        input_shape = tuple(input_shape) if input_shape else None # noqa: No PyCharm it's not None, we checked for that.
+        layer = cls(**layer_config)
+        if build_if_can and input_shape:
+            if layer.built is not None:
+                layer.build(input_shape)
+            else:
+                layer.input_shape = input_shape
+        layer.training = training
+        layer.dtype = dtype
+        return layer
+
 
 class Dense(Layer):
 
@@ -454,6 +511,11 @@ class Dense(Layer):
         self.apply_l2_gradients()
         return ops.dot(d_values, self.weights.T)
 
+    def get_config(self) -> dict:
+        layer_config = super().get_config()
+        layer_config.update({'neurons': self.units})
+        return layer_config
+
 
 class Dropout(Layer):
 
@@ -484,6 +546,11 @@ class Dropout(Layer):
 
     def backward(self, d_values: ops.ndarray) -> ops.ndarray:
         return d_values * self.binary_mask
+
+    def get_config(self) -> dict:
+        layer_config = super().get_config()
+        layer_config.update({'rate': self.rate})
+        return layer_config
 
 
 class SpatialLayer(Layer):
@@ -568,6 +635,15 @@ class SpatialLayer(Layer):
                 *self.to_nhwc_format(self.output_shape),
                 *self.to_nhwc_format(self.padded_input_shape)[1:end_idx],
                 self.nhwc)
+
+    def get_config(self) -> dict:
+        layer_config = super().get_config()
+        window_key = 'kernel_size' if isinstance(self, Conv2D) else 'pool_size'
+        layer_config.update({window_key: self.window_size, 'strides': self.strides, 'padding': self.padding})
+        kernel_initializer = layer_config.pop('weight_initializer', None)
+        if kernel_initializer:
+            layer_config.update({'kernel_initializer': kernel_initializer})
+        return layer_config
 
 
 class Conv2D(SpatialLayer):
