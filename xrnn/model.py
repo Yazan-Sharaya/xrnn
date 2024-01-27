@@ -57,20 +57,43 @@ class Model:
         self.built = False
         self.input_shape = None
         self.batch_size = None
+        self._output_shape = None
 
-    def set(self, optimizer: optimizers.Optimizer, loss: losses.Loss) -> None:
-        """Sets the model loss and optimizer to use.
+    def set(
+            self,
+            optimizer: Union[optimizers.Optimizer, config.Literal['adam', 'sgd', 'rmsprop', 'adagrad']],
+            loss: Union[losses.Loss, config.Literal['mse', 'categorical_crossentropy', 'binary_crossentropy']]) -> None:
+        """
+        Sets the model loss and optimizer to use.
 
         Parameters
         ----------
-        optimizer: Optimizer
-            An optimizer instance to use for optimizer the model. See `xrnn.optimizers` for available ones
-        loss: Loss
-            A loss object instance used to calculate the model's loss. See `xrnn.losses` for available ones.
+        optimizer: Optimizer, str
+            An optimizer instance to use for optimizer the model. See `xrnn.optimizers` for available ones or a string.
+            In the case of a string, it must be one of the following: adam, sgd, rmsprop, adagrad, and an optimizer of
+            that type is going to be created with its default parameters.
+        loss: Loss, str
+            A loss object instance used to calculate the model's loss. See `xrnn.losses` for available ones or a string.
+            In case of a string, it must be one of the following: mse, categorical_crossentropy, binary_crossentropy.
         """
+        if isinstance(optimizer, str):
+            opt_str = {
+                'adam': optimizers.Adam, 'sgd': optimizers.SGD,
+                'rmsprop': optimizers.RMSprop, 'adagrad': optimizers.Adagrad}
+            if optimizer.lower() not in opt_str:
+                raise ValueError(f"Invalid optimizer. Must be one of {opt_str.keys()}. Got {optimizer}.")
+            optimizer = opt_str[optimizer.lower()]()
+        if isinstance(loss, str):
+            loss_str = {
+                'mse': losses.MSE,
+                'categorical_crossentropy': losses.CategoricalCrossentropy,
+                'binary_crossentropy': losses.BinaryCrossentropy}
+            if loss.lower() not in loss_str:
+                raise ValueError(f"Invalid loss. Must be one of {loss_str.keys()}. Got {loss}")
+            loss = loss_str[loss.lower()]()
         self.optimizer = optimizer
         self.loss = loss
-        if self.trainable_layers:
+        if self.loss and self.trainable_layers:
             self.loss.trainable_layers = self.trainable_layers
 
     def add(self, layer) -> None:
@@ -80,7 +103,26 @@ class Model:
             if self.loss:  # If the loss is set first, then layers are added.
                 if layer not in self.loss.trainable_layers:
                     self.loss.trainable_layers.append(layer)
+        if self.built:
+            if layer.built is None:
+                layer.input_shape = self.output_shape
+            elif layer.built is False:
+                layer.build(self.output_shape)
+            else:
+                if layer.input_shape != self.output_shape:
+                    raise ValueError(
+                        f"Layer {layer.name} expects inputs with shape {layer.input_shape}. Got input_shape="
+                        f"{self.output_shape}.")
+            self._output_shape = layer.compute_output_shape(self.output_shape)
         self.layers.append(layer)
+
+    @property
+    def output_shape(self):
+        """Returns the output shape of the model."""
+        if not self.built:
+            raise ValueError(
+                'The model has not been built, please build the model first by calling `model.build(input_shape)`')
+        return self._output_shape
 
     def build(self, input_shape: tuple) -> None:
         """
@@ -91,6 +133,7 @@ class Model:
          - That the first value in `input_shape` should be batch size not the number of samples in the dataset.
          - Layers can only be built once, so a second build with different input shape isn't going to re-build the model.
         """
+        input_shape = tuple(input_shape)
         self.batch_size = input_shape[0]
         self.built = True
         self.input_shape = input_shape
@@ -102,7 +145,19 @@ class Model:
                 if i + 1 < len(self.layers) and isinstance(self.layers[i + 1], activations.ReLU):
                     activation = 'relu'
                 layer.build(input_shape, activation)
+            elif built is True:
+                if input_shape != layer.input_shape:
+                    raise ValueError(
+                        f"Layer {layer.name} expects inputs with shape {layer.input_shape}. Got input_shape="
+                        f"{input_shape}.")
+            else:
+                expected_dims = getattr(layer, 'expected_dims', None)
+                if expected_dims and len(input_shape) != expected_dims:
+                    raise ValueError(
+                        f"Layer {layer.name} expects inputs to be {expected_dims}D. Got {input_shape}.")
+                layer.input_shape = input_shape
             input_shape = layer.compute_output_shape(input_shape)
+        self._output_shape = input_shape
 
     def forward(self, inputs: ops.ndarray, training: bool = True) -> ops.ndarray:
         """
