@@ -472,13 +472,13 @@ class Dropout(Layer):
         super().__init__()
         if not 0 <= rate <= 1:
             raise ValueError('Dropout rate value must be between zero and one.')
-        self.rate = 1 - rate  # The numpy functions that is used to implement dropout takes the success rate
-        # (result equals 1), that's why we invert the rate.
+        self.rate = rate
         self.binary_mask = None
 
     def forward(self, inputs: ops.ndarray) -> ops.ndarray:
-        if self.training:
-            self.binary_mask = ops.random.binomial(1, self.rate, self.input_shape) / self.rate
+        if self.training and self.rate != 0:
+            # numpy.binomial takes the success rate (result equals 1), that's why we invert the rate.
+            self.binary_mask = ops.random.binomial(1, 1 - self.rate, self.input_shape) / (1 - self.rate)
             return inputs * self.binary_mask
         return inputs
 
