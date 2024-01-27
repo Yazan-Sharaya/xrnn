@@ -1094,7 +1094,7 @@ class Flatten(Layer):
     """
 
     def compute_output_shape(self, input_shape: tuple) -> tuple:
-        return input_shape[0], ops.prod(input_shape[1:])
+        return input_shape[0], ops.prod(input_shape[1:]).item()
 
     def forward(self, inputs: ops.ndarray) -> ops.ndarray:
         return inputs.reshape((inputs.shape[0], -1))
