@@ -1,21 +1,24 @@
 """Defines the `Model` class that is used for building, training, and using neural networks. See `Model`'s documentation
 for more info and example usage."""
-from xrnn.data_handler import DataHandler, SupportsGetitem
-from xrnn import layer_utils
+import time
+import warnings
+from collections import deque  # Used to implement moving average used to calculate the average step time.
+from functools import reduce
+from typing import Union, List, IO
+import json
+import os
+import zipfile
+import tempfile
+
 from xrnn import activations
-from xrnn import optimizers
-from xrnn import metrics
+from xrnn import config
+from xrnn import layer_utils
 from xrnn import layers
 from xrnn import losses
-from xrnn import config
+from xrnn import metrics
 from xrnn import ops
-from collections import deque  # Used to implement moving average that is used to calculate the average step time.
-from functools import reduce
-from typing import Union, List
-import warnings
-import pickle
-import time
-import copy
+from xrnn import optimizers
+from xrnn.data_handler import DataHandler, SupportsGetitem
 
 
 class Model:
@@ -43,18 +46,15 @@ class Model:
           layer unlike `keras.models.Model` for example. This is more like `keras.models.Sequential`.
         * The model is lazily built, meaning that layers' weights and biases aren't initialized/created until explicitly
           calling `model.build(input_shape)` or implicitly when an input is passed to the model like when calling
-          `predict` for example. Until that happens the model is just a blueprint for constructing the neural network,
-          therefor, creating instances of `Model` is very cheap.
+          `predict` for example. Until that happens, the model is just a blueprint for constructing the neural network,
+          therefor, creating instances of `Model` are very cheap.
         """
 
         self.layers = []
         self.trainable_layers = []
         self.loss = None
         self.optimizer = None
-        self.training = None
         self.built = False
-        self.accumulated_acc = 0
-        self.accumulated_count = 0
         self.input_shape = None
         self.batch_size = None
 
@@ -77,7 +77,7 @@ class Model:
         """Add layers to the network in sequential order."""
         if hasattr(layer, 'weights'):
             self.trainable_layers.append(layer)
-            if self.loss:  # If the loss is set first then layers are added.
+            if self.loss:  # If the loss is set first, then layers are added.
                 if layer not in self.loss.trainable_layers:
                     self.loss.trainable_layers.append(layer)
         self.layers.append(layer)
@@ -88,7 +88,8 @@ class Model:
 
         Notes
         -----
-        That the first value in `input_shape` should be batch size not the number of samples in the dataset.
+         - That the first value in `input_shape` should be batch size not the number of samples in the dataset.
+         - Layers can only be built once, so a second build with different input shape isn't going to re-build the model.
         """
         self.batch_size = input_shape[0]
         self.built = True
@@ -104,17 +105,32 @@ class Model:
             input_shape = layer.compute_output_shape(input_shape)
 
     def forward(self, inputs: ops.ndarray, training: bool = True) -> ops.ndarray:
-        """Passes `inputs` through the whole network."""
+        """
+        Passes `inputs` through the whole network.
+
+        Parameters
+        ----------
+        inputs: array_like
+            The input to the pass through the network.
+        training: bool
+            Whether to set the layers to training mode. The behaviour of some layers differs between training and
+            inference modes, so set this parameter accordingly.
+
+        Returns
+        -------
+        output: array_like
+            The output of the network.
+        """
         if not self.built:
             self.build(inputs.shape)
-        before_stats = [layer.training for layer in self.layers]  # Save the training stat of the layer before changing
-        # it so it can be reset after changing the stats for all layers. This is needed because the user might set a
-        # layer training stat to something other than the default, so we need to keep track of that.
+        before_states = [layer.training for layer in self.layers]  # Save the training state of the layer before
+        # changing it, so it can be reset after changing the states for all layers. This is needed because the user
+        # might set a layer training state to something other than the default, so we need to keep track of that.
         for layer in self.layers:
             layer.training = training
         # Applies the forward method of each layer in a chain (last_layer.forward(second_to_last.forward(...)) and so on
         output = reduce(lambda x, layer_forward: layer_forward(x), [layer.__call__ for layer in self.layers], inputs)
-        for layer, state in zip(self.layers, before_stats):
+        for layer, state in zip(self.layers, before_states):
             layer.training = state
         return output
 
@@ -130,7 +146,7 @@ class Model:
             d_values = y_pred.copy()
             d_values[ops.arange(len(y_true)), y_true.astype('int')] -= 1
             d_inputs = d_values / len(y_true)
-            layers_to_backward = self.layers[-2::-1]  # The whole list reversed excluding the last element.
+            layers_to_backward = self.layers[-2::-1]  # The whole list reversed, excluding the last element.
         else:
             d_inputs = self.loss.backward(y_true, y_pred)
             layers_to_backward = self.layers[::-1]
@@ -144,12 +160,12 @@ class Model:
         """Prints a progressbar on one line and keeps updating it."""
         curr_step, tot_steps = info['step'], info['steps']
         print(f"\rstep: {curr_step:{len(str(tot_steps))}d}/{tot_steps} ", end='')  # first part: "step/total_steps".
-        progress = int(size*curr_step / tot_steps)
+        progress = int(size * curr_step / tot_steps)
         left = int(size * (tot_steps - curr_step) / tot_steps)
         while progress + left < size:
             left += 1
         print(f"[{'=' * progress + '.' * left:{size}s}] - ", end='')  # the progress bar part.
-        print(f"{(curr_step / tot_steps) * 100:2.0f}% - ", end='')  # the percentage part.
+        print(f"{curr_step / tot_steps:.0%} - ", end='')  # the percentage part.
         epoch_time = info.get('epoch_time')
         if epoch_time:
             print(f"Took: {layer_utils.time_unit_converter(epoch_time)} - ", end='')
@@ -158,7 +174,7 @@ class Model:
         for i, key in enumerate(list(info.keys())[4:]):  # other info like val acc/loss. Starting from the 4th element
             # because the first 4 elements are already printed above before the for loop.
             print(f"{key}: {info[key]:.3f}", end=' - ' if i < len(info) - 5 else '')
-        if epoch_time:  # If it's not None it means the epoch ended.
+        if epoch_time:  # If it's not None, it means the epoch ended.
             print()  # Add a new line after the epoch ends to not print next to the progressbar because it doesn't
             # end with a newline.
 
@@ -182,12 +198,12 @@ class Model:
         ----------
         x:
             Input features (data) to train on. This can be a list, a NumPy array, or a custom object. In the case
-            of the custom object, it has to meat a few guidelines. it must define both `__getitem__` and `__len__`
+            of the custom object, it has to meat a few guidelines. It must define both `__getitem__` and `__len__`
             magic attributes, where `len(obj)` returns the number of batches in the datatest and `obj[batch_idx]`
             returns a tuple containing batch x and batch y. If this custom object is passed, `y` has to be None.
-        y: list, numpy array, optioanl
+        y: list, numpy array, optional
             Input labels. This can be a list or a NumPy array. Labels should be 2-dimensional when the loss is
-            binary crossentropy, mean squared error or categorical crossentropy and the labels are one-hot encoded.
+            binary crossentropy, mean-squared error or categorical crossentropy, and the labels are one-hot encoded.
         batch_size: int, optional
             How many samples to pass through the whole network at once. Batch size has a direct impact on
             memory consumption and performance, so you want to find a value that utilizes the cpu/gpu without running
@@ -198,10 +214,10 @@ class Model:
             Whether to randomly shuffle the dataset. Ignored if `x` is `DataHandler` like object.
         validation_data: list, numpy array, DataHandler, optional
             A list containing [x_test, y_test] to validate the model. During the model validation,
-            the model's weights and biases aren't updated. Can be the same type of objects as `x`.
+            the model's weights and biases aren't updated. It can be the same type of objects as `x`.
         validation_split: float, optional
-            How much percentage of the training data (x and y) to use for validation. Not supported
-            when `x` is `DataHandler` object, also **note**, either `validation_data` or `validation_split` can be set.
+            The fraction of the training data (x and y) to use for validation. Not supported when `x` is `DataHandler`
+            object. If both `validation_split` and `validation_data` are provided, `validation_data` is used.
         validation_freq: int, optional
             Every how many epochs to validate the model. Default is at the end of each epoch. If set
             to zero or None, no validation is performed.
@@ -269,7 +285,7 @@ class Model:
                 self.backward(batch_y, output)
                 for layer in self.trainable_layers:
                     if layer.training:  # Only update parameters for layers that have training set to True. This check
-                        # is performed every time because the layer might be trained for certain amount of steps then
+                        # is performed every time because the layer might be trained for a certain number of steps then
                         # frozen, the same reason why all `trainable` layers are added to a list and not just the
                         # `trainable`s.
                         self.optimizer.update_params(layer)
@@ -287,8 +303,8 @@ class Model:
                 if steps_per_epoch and (batch_idx + 1) == steps_per_epoch:
                     break
             if val_data_handler and validation_freq and (epoch + 1) % ops.lcm(validation_freq, print_every) == 0:
-                # Only print if epoch is multiple of lcm(validation_freq, print_every). for e.g. if print_every = 3 and
-                # validation_freq = 4, print every 12th epoch.
+                # Only print if epoch is multiple of lcm(validation_freq, print_every). For e.g., if print_every = 3 and
+                # validation_freq = 4, validate every 12th epoch.
                 val_res = self.evaluate(val_data_handler)
                 progress_info.update({'epoch_time': time.perf_counter() - epoch_start_t})
                 self.update_progressbar({**progress_info, 'val_loss': val_res['loss'], 'val_acc': val_res['acc']})
@@ -302,7 +318,7 @@ class Model:
             x: Union[ops.ndarray, list, SupportsGetitem],
             y: Union[ops.ndarray, list] = None,
             batch_size: int = 32) -> dict:
-        """Evaluates/validates the model using `x` data. *Note* no model training is performed at this step."""
+        """Evaluates/validates the model using `x` and `y` data."""
         if not isinstance(x, DataHandler):
             data_handler = DataHandler(x, y, batch_size, shuffle=False)
         else:
@@ -323,7 +339,7 @@ class Model:
         Provides an interface to use model for inference/prediction.
 
         This method provides some useful features over using the `forward` method directly. First, it sets the training
-        flag in the layers to false, which makes performing a forward pass through the network faster and uses less
+        flag in the layers to false, which makes performing a forward pass through the network faster and use less
         memory because the layers don't save any intermediate calculations/inputs/outputs they have/do because these
         values are only required for backpropagation which isn't going to be performed here. Second, it allows
         performing the forward pass (inference) in batches.
@@ -334,6 +350,7 @@ class Model:
             Data to perform inference/predict using.
         batch_size: int
             Number of samples to perform a prediction on each step. Lower the number if encountering oom issues.
+            If None, the whole input is passed at once.
 
         Returns
         -------
@@ -364,7 +381,7 @@ class Model:
         Parameters
         ----------
         batch_size: int, optional
-            How many samples each slice of the data contain. This number largely determine the memory consumption,
+            How many samples each slice of the data contains. This number largely determines the memory consumption,
             because some inputs/outputs of the layer are saved and the more samples a batch has, the more memory is
             consumed. Defaults to None, which means use the batch size the model was built with/trained on. You can
             provide any number for this parameter to see how much memory is going to be consumed by the network without
@@ -378,7 +395,7 @@ class Model:
         if not self.built:
             raise ValueError("The model must be built before calling this method. Please call `model.build()` first.")
         batch_size = batch_size or self.batch_size  # Give priority to the provided batch_size when picking.
-        input_shape = (batch_size, ) + self.input_shape[1:]
+        input_shape = (batch_size,) + self.input_shape[1:]
         tot = 0
         for layer in self.layers:
             tot += layer_utils.layer_memory_consumption(
@@ -398,21 +415,21 @@ class Model:
 
         Notes
         -----
-        * parameters memory consumption calculates how much memory all the layers weights and biases take.
-        * gradient memory consumption calculates how much memory all the layers gradients (dL/d_weights, dL/d_biases)
+        * Parameters memory consumption calculates how much memory all the layers weights and biases take.
+        * Gradient memory consumption calculates how much memory all the layers gradients (dL/d_weights, dL/d_biases)
           and the optimizer stats (weight momentum cache, biases momentum cache, etc.) take.
-        * activations memory consumption calculates how much memory al the layers saved inputs/output take.
+        * Activations memory consumption calculates how much memory al the layers saved inputs/output take.
         * For memory consumption, it calculates how
           much the activation/gradients are going to take when a forward/backward pass is performed, so when the model
           is first built and the gradients haven't been calculated yet, it's still going to print (how much) memory
           they are going to take.
-        * When no optimizer is set for the model, it's assumed that the model is only going to be used for inference
+        * When no optimizer is set for the model, it's assumed that the model is only going to be used for inference,
           so no activation/gradients are going to be created thus 0 memory consumption.
 
         Parameters
         ----------
         batch_size: int, optional
-            How many samples each slice of the data contain. This number largely determine the memory consumption,
+            How many samples each slice of the data contains. This number largely determines the memory consumption,
             because some inputs/outputs of the layer are saved and the more samples a batch has, the more memory is
             consumed. Defaults to None, which means use the batch size the model was built with/trained on. You can
             provide any number for this parameter to see how much memory is going to be consumed by the network without
@@ -425,7 +442,7 @@ class Model:
                 "Please call `model.build()` before calling `summary()` because the model has to be built.")
         batch_size = batch_size or self.batch_size  # Give priority to the provided batch_size when picking.
         if batch_size > 1024:
-            if not batch_size & (batch_size-1) == 0:  # check if batch size is not a power of 2
+            if not batch_size & (batch_size - 1) == 0:  # check if batch size is not a power of 2
                 warnings.warn(
                     "Usually `batch_size` is a power of 2 and isn't this large. Are you sure that the first "
                     "value in the input shape tuple that was passed to `model.build()` is the batch size and not the "
@@ -437,10 +454,8 @@ class Model:
         tot_mem_grads = 0
         tot_mem_activations = 0
         tot_mem = 0
-        stats = [['Layer', 'params #', 'input_shape', 'output_shape']]
-        if memory_consumption and not batch_size:
-            raise ValueError('`batch_size` must be specified to calculate the memory consumption')
-        input_shape = (batch_size, ) + self.input_shape[1:]
+        column_titles = [['Layer', 'params #', 'input_shape', 'output_shape']]
+        input_shape = (batch_size,) + self.input_shape[1:]
         for layer in self.layers:
             params = layer.weights.size + layer.biases.size if hasattr(layer, 'weights') else 0
             bn_non_trainable = layer.weights.size * 2 if isinstance(layer, layers.BatchNormalization) else 0
@@ -459,17 +474,17 @@ class Model:
                 tot_mem_activations += mem_activation
                 tot_mem += mem_tot
             output_shape = layer.compute_output_shape(input_shape)
-            stats.append([layer.name, params, str(input_shape), str(output_shape)])
+            column_titles.append([layer.name, params, str(input_shape), str(output_shape)])
             input_shape = output_shape
         layer_utils.print_table(
-            stats,
-            {"Trainable params": '{:,}'.format(trainable_params),
-             "Non-trainable params": '{:,}'.format(non_trainable_params),
-             "Total params": '{:,}'.format(tot_params),
-             "Params mem consumption": layer_utils.to_readable_unit_converter(tot_mem_params),
-             "Gradients mem consumption": layer_utils.to_readable_unit_converter(tot_mem_grads),
-             "Activations mem consumption": layer_utils.to_readable_unit_converter(tot_mem_activations),
-             "Total mem consumption": layer_utils.to_readable_unit_converter(tot_mem)})
+            column_titles,
+            {
+                "Trainable params": f'{trainable_params:,}',
+                "Non-trainable params": f'{non_trainable_params:,}',
+                "Total params": f'{tot_params:,} ({layer_utils.to_readable_unit_converter(tot_mem_params)})',
+                "Gradients mem consumption": layer_utils.to_readable_unit_converter(tot_mem_grads),
+                "Activations mem consumption": layer_utils.to_readable_unit_converter(tot_mem_activations),
+                "Total mem consumption": layer_utils.to_readable_unit_converter(tot_mem)})
 
     def get_parameters(self) -> List[list]:
         """Returns the model weights and biases as two separate numpy arrays."""
