@@ -286,29 +286,20 @@ class Model:
         """
         if self.optimizer is None or self.loss is None:
             raise ValueError("The optimizer and loss aren't set yet, please call `model.set(opt, loss)`")
-        if not 0 <= validation_split < 1.:
-            raise ValueError('Validation_split must be in range [0, 1).')
-        if validation_split:
-            if validation_data is not None:
-                raise ValueError("Either `validation_data` or `validation_split` can be provided. Got both.")
+        if validation_data is not None:
+            if not isinstance(validation_data, (list, tuple)):
+                validation_data = [validation_data, None]
+        elif validation_split:
             if y is None:
                 raise TypeError("`validation_split` is not supported when `x` is a generator like/DataHandler object.")
             x, y, x_test, y_test = DataHandler.train_test_split(x, y, validation_split)
             validation_data = [x_test, y_test]
-        val_data_handler = None
-        if validation_data is not None:
-            if isinstance(validation_data, (list, tuple)):
-                val_data_handler = DataHandler(validation_data[0], validation_data[1], batch_size, shuffle=False)
-            elif hasattr(validation_data, '__getitem__'):
-                val_data_handler = DataHandler(validation_data)
-            else:
-                raise TypeError(
-                    f"Validation data must be a list containing `x` and `y`, an iterator object that supports "
-                    f"`__getitem__` or a `DataHandler` object. Got {type(validation_data)}.")
+        val_data_handler = DataHandler(*validation_data) if validation_data else None
         config.set_sleep_state(not disable_sleep)
         start_t = time.time()
         print_every = print_every or epochs + 1  # This way if it's set to zero, None or False updates are never printed
         data_handler = DataHandler(x, y, batch_size, shuffle)
+        steps_per_epoch = min(steps_per_epoch, len(data_handler)) if steps_per_epoch else len(data_handler)
         self.batch_size = data_handler.batch_size
         acc = metrics.Accuracy(self.loss)
         # Keep the most recent 10% number of the total steps.
@@ -318,7 +309,7 @@ class Model:
             epoch_loss = 0
             epoch_acc = 0
             progress_info = {
-                'step': 0, 'steps': steps_per_epoch or len(data_handler),
+                'step': 0, 'steps': steps_per_epoch,
                 'avg_step_time': 0, 'epoch_time': None, 'loss': epoch_loss, 'acc': epoch_acc}
             self.loss.reset_count()
             acc.reset_count()
@@ -352,16 +343,19 @@ class Model:
                     {'step': batch_idx + 1, 'avg_step_time': avg_step_time, 'loss': epoch_loss, 'acc': epoch_acc})
                 if should_print:
                     self.update_progressbar(progress_info)
-                    pass
-                if steps_per_epoch and (batch_idx + 1) == steps_per_epoch:
+                if batch_idx + 1 == steps_per_epoch:
                     break
+            self.optimizer.epoch += 1
             if val_data_handler and validation_freq and (epoch + 1) % ops.lcm(validation_freq, print_every) == 0:
                 # Only print if epoch is multiple of lcm(validation_freq, print_every). For e.g., if print_every = 3 and
                 # validation_freq = 4, validate every 12th epoch.
                 val_res = self.evaluate(val_data_handler)
+                progress_info.update({'val_loss': val_res['loss'], 'val_acc': val_res['acc']})
+            if should_print:
                 progress_info.update({'epoch_time': time.perf_counter() - epoch_start_t})
-                self.update_progressbar({**progress_info, 'val_loss': val_res['loss'], 'val_acc': val_res['acc']})
-        if epochs > 1:  # Because the progressbar prints how long an epoch took, so there's no reason to print it again.
+                self.update_progressbar(progress_info)
+        # Because the progressbar prints how long an epoch took, so there's no reason to print it again if epochs=1.
+        if epochs > 1 and print_every <= epochs:
             print(f"Training took {(time.time() - start_t):.3f} seconds")
         config.set_sleep_state(True)  # Resets the computer sleep state. Doesn't matter if the sleep state was changed
         # or not before, because this function works based on the thread it's called from not system-wide.
