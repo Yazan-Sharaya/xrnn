@@ -131,7 +131,7 @@ class Model:
         Notes
         -----
          - That the first value in `input_shape` should be batch size not the number of samples in the dataset.
-         - Layers can only be built once, so a second build with different input shape isn't going to re-build the model.
+         - Layers can only be built once, so calling `build()` a second time would raise a ValueError.
         """
         input_shape = tuple(input_shape)
         self.batch_size = input_shape[0]
@@ -188,6 +188,10 @@ class Model:
         for layer, state in zip(self.layers, before_states):
             layer.training = state
         return output
+
+    def __call__(self, inputs: ops.ndarray, training: bool = True) -> ops.ndarray:
+        """Calls the model's `forward` method, passing `inputs` through the network."""
+        return self.forward(inputs)
 
     def backward(self, y_true: ops.ndarray, y_pred: ops.ndarray) -> ops.ndarray:
         """Backpropagate through the whole network."""
@@ -533,88 +537,155 @@ class Model:
                 "Activations mem consumption": layer_utils.to_readable_unit_converter(tot_mem_activations),
                 "Total mem consumption": layer_utils.to_readable_unit_converter(tot_mem)})
 
-    def get_parameters(self) -> List[list]:
-        """Returns the model weights and biases as two separate numpy arrays."""
-        weights, biases = [], []
-        for layer in self.trainable_layers:
-            layer_weights, layer_biases = layer.get_parameters()
-            weights.append(layer_weights)
-            biases.append(layer_biases)
-        return [weights, biases]
+    def get_params(self) -> List[List[ops.ndarray]]:
+        """Returns a list of lists containing each layer's parameters."""
+        if not len(self.trainable_layers):
+            raise ValueError('The model does not have any trainable layers.')
+        return [layer.get_params() for layer in self.trainable_layers]
 
-    def set_params_from_keras_model(self, model, copy_params: bool = True) -> None:
-        """Takes a keras model instance and sets this model parameters to the same values of the keras model."""
-        if len(self.layers) != len(model.layers):
-            raise ValueError(
-                f"Both models must have the same architecture, but `xrnn` model has {len(self.layers)} layers while "
-                f"keras' model has {len(model.layers)} layers.")
-        for self_layer, keras_layer in zip(self.layers, model.layers):
-            params = keras_layer.get_weights()
-            if params:
-                if len(params) == 4:  # BatchNorm:
-                    if params[0].ndim == 1:
-                        params = [ops.expand_dims(arr, (0, 1, 2)) for arr in params]
-                    self_layer.set_parameters(*params[:2], copy_params)
-                    self_layer.moving_mean = params[2].copy()
-                    self_layer.moving_var = params[3].copy()
-                elif len(params) == 2:  # Pass keras=True if it's a Conv2D layer to correctly deal with the kernel.
-                    args = (*params, copy_params, True) if 'Conv' in str(self_layer) else (*params, copy_params)
-                    self_layer.set_parameters(*args)
-                else:
-                    raise ValueError(
-                        f"Expected keras layer to return 2 or 4 values. However, layer {keras_layer.name} returned "
-                        f"{len(params)} parameter arrays.")
+    def set_params(self, params: List[List[ops.ndarray]], keras_weights: bool = False) -> None:
+        """
+        Sets the model's layers' parameters.
 
-    def set_parameters(self, params: List[list]) -> None:
-        """Sets the model parameters. Takes in a list of lists where each inner list contains weights and biases. The
-        length of the `params` parameter (how many lists of weights and biases it has) should be equal to the number or
-        trainable layers in the model."""
+        Parameters
+        ----------
+        params: list of lists
+            A list of lists containing each layer's parameters.
+        keras_weights: bool, optional
+            Whether the parameters come from a keras model. Defaults to False
+
+        Raises
+        ------
+        IndexError
+            If the number of lists containing the parameters doesn't match the number of layers in the model that
+            have parameters.
+        ValueError
+            If the model hasn't been built, if there's a shape mismatch between a layer's parameters and its
+            corresponding new parameters.
+        """
         if len(params) != len(self.trainable_layers):
-            raise ValueError(
-                f"Layer count mismatch. This model has {len(self.trainable_layers)} layers, but the provided "
-                f"parameters list has a length of {len(params)} layers.")
-        for i, (layer_weights, layer_biases) in enumerate(zip(*params)):
-            try:
-                self.trainable_layers[i].set_parameters(layer_weights, layer_biases)
-            except IndexError:
-                raise IndexError(
-                    "There are more parameter sets than there are layers in the network. Please make sure that this "
-                    "model has the same layer structure as model the weights were saved from.")
+            raise IndexError(
+                f"Number of supplied parameters does not match number of layers with parameters in the model. Number "
+                f"of layers is {len(self.trainable_layers)}, got {len(params)}.")
+        for layer, layer_params in zip(self.trainable_layers, params):
+            if isinstance(layer, layers.Conv2D):
+                layer.set_params(layer_params, keras_weights)
+            else:
+                layer.set_params(layer_params)
 
-    def save_parameters(self, path: str) -> None:
+    def save_params(self, path: str) -> None:
         """
-        Saves the model trainable layers weights' and biases'.
+        Saves the model's parameters to disk. The model must be built before calling this method.
 
-        Notes
-        -----
-        This method doesn't save the structure of the model or the optimizer state, if you want to keep all that
-        use `save_model` method instead.
+        See Also
+        save: Saves the model's config and optimizer along its parameters.
         """
-        path += '.params' if not path.endswith('.params') else ''
-        with open(path, 'wb') as f:
-            pickle.dump(self.get_parameters(), f)
+        ops.random.binomial()
+        model_params = self.get_params()
+        model_params_dict = {}
+        for layer, layer_params in zip(self.trainable_layers, model_params):
+            for i, param in enumerate(layer_params):
+                model_params_dict[f"{layer.name}_{i}"] = param
+        ops.savez(path, **model_params_dict)
 
-    def load_parameters(self, path: str) -> None:
-        """Loads weights and biases from desk and sets them as the model weights and biases."""
-        with open(path, 'rb') as f:
-            self.set_parameters(pickle.load(f))
+    def load_params(self, path: Union[str, IO]) -> None:
+        """Loads the model's parameters from disk. The model must be built before calling this method."""
+        model_params = []
+        with ops.load(path) as model_params_dict:
+            layer_params = []
+            for i, key in enumerate(model_params_dict):
+                if i != 0 and key.endswith('0'):
+                    model_params.append(layer_params)
+                    layer_params = []
+                layer_params.append(model_params_dict[key])
+            model_params.append(layer_params)
+        self.set_params(model_params)
 
     def save(self, path: str) -> None:
-        """Saves the whole model with its layers, parameters, structure/layout and optimizer state. *Note* this method
-        is inefficient because it makes a copy of the model and saves the copy to avoid changing the current state of
-        the model using pickle, which is another inefficiency."""
-        model = copy.deepcopy(self)
-        model.loss.reset_count()
-        path += '.model' if not path.endswith('.model') else ''
-        for layer in model.layers:
-            for attr in ['d_inputs, d_weights', 'd_biases', 'inputs']:
-                if hasattr(layer, attr):
-                    setattr(layer, attr, None)
-        with open(path, 'wb') as model_file:
-            pickle.dump(model, model_file)
+        """
+        Saves the whole model to disk. This method is different to `save_params` in that it saves the model's
+        architecture, input shape and optimizer state, meaning you can load the entire model later without the need
+        to know the model's architecture and input shape.
+        .. note:: The model is saved as a zip file with '.xmodel' file extension.
+        """
+        # TODO: Save the layers' parameters cache and momentum cache used by the optimizer.
+        path += '.xmodel' if not path.endswith('.xmodel') else ''
+        with zipfile.ZipFile(path, 'w') as model_file:
+            json.dumps(self.get_config()['opt_config'])
+            model_file.writestr('model_config.json', json.dumps(self.get_config()))
+            model_params_path = os.path.join(tempfile.gettempdir(), 'temp_model_params.npz')
+            self.save_params(model_params_path)
+            model_file.write(model_params_path, 'model_params.npz')
+            os.remove(model_params_path)
 
     @staticmethod
     def load(path: str) -> 'Model':
-        """Loads a saved model from desk and returns a model object."""
-        with open(path, 'rb') as model_file:
-            return pickle.load(model_file)
+        """Loads a model from disk."""
+        with zipfile.ZipFile(path) as saved_model:
+            with saved_model.open(
+                    'model_config.json') as config_file, saved_model.open('model_params.npz') as model_params_file:
+                # Fun fact: Python versions <3.9 don't support parenthesized context managers because the parser they
+                # use `LL(1)` sucks. See
+                # stackoverflow.com/questions/68924790/parenthesized-context-managers-work-in-python-3-9-but-not-3-8
+                model_config = json.load(config_file)
+                model = Model.from_config(model_config, True)
+                model.load_params(model_params_file)
+        return model
+
+    def get_config(self) -> dict:
+        """
+        Returns the model's configuration. It contains the following keys:
+         - 'layers_configs': A list that contains each layer's config.
+         - 'opt_config': The optimizer configuration if it's set, None otherwise.
+         - 'loss': Loss class name (e.g, CategoricalCrossentropy) if its set, None otherwise.
+
+        Returns
+        -------
+        model_config: dict
+            The model's config.
+        """
+        layers_configs = [layer.get_config() for layer in self.layers]
+        opt_config, loss = None, None
+        if self.optimizer:
+            opt_config = self.optimizer.get_config()
+            loss = type(self.loss).__name__
+        return {'layers_configs': layers_configs, 'opt_config': opt_config, 'loss': loss}
+
+    @classmethod
+    def from_config(cls, model_config: dict, build_if_can: bool = False) -> 'Model':
+        """
+        Creates a new `Model` instance from the given config.
+
+        Parameters
+        ----------
+        model_config: dict
+            A dictionary containing the model's configuration, usually obtained from `model.get_config()`.
+        build_if_can: bool, optional
+            Whether to build the created model if input_shape was defined in the config. Defaults to False.
+
+        Returns
+        -------
+        layer: Model
+            The created model instance.
+        """
+        model_config = model_config.copy()
+        model = cls()
+        layers_configs = model_config['layers_configs']
+        opt_config = model_config['opt_config']
+        for layer_config in layers_configs:
+            layer_type = layer_config['type']
+            if hasattr(layers, layer_type):
+                model.add(getattr(layers, layer_type).from_config(layer_config))
+            elif hasattr(activations, layer_type):
+                model.add(getattr(activations, layer_type).from_config(layer_config))
+            else:
+                raise NotImplementedError(
+                    f"Creating a model that contains custom layers from a config isn't currently implemented. "
+                    f"Unsupported layer type: {layer_type}.")
+        if opt_config:
+            opt = getattr(optimizers, opt_config['type']).from_config(opt_config)
+            model.set(opt, getattr(losses, model_config['loss'])())
+        input_shape = layers_configs[0].get('input_shape', None)
+        if build_if_can and input_shape:
+            model.build(input_shape)
+        return model
