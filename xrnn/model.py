@@ -580,7 +580,6 @@ class Model:
         See Also
         save: Saves the model's config and optimizer along its parameters.
         """
-        ops.random.binomial()
         model_params = self.get_params()
         model_params_dict = {}
         for layer, layer_params in zip(self.trainable_layers, model_params):
