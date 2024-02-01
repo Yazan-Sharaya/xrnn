@@ -1,5 +1,7 @@
 EXtremely Rapid Neural Networks (xrnn)
 ======================================
+[![PyPI version](https://badge.fury.io/py/xrnn.svg)](https://badge.fury.io/py/xrnn)
+
 Is a Python machine learning framework for building layers and neural networks
 by exposing an easy-to-use interface for building neural networks as a series of layers, similar to
 [Keras](https://keras.io/getting_started/), while being as lightweight, fast, compatible and extendable as possible.
