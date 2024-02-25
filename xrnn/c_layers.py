@@ -1,5 +1,5 @@
-"""This module loads the shared library that contain function definitions for convolution and pooling that were written
-in c and compiled into a shared library for performance reasons and makes these functions callable from python."""
+"""This module loads the shared library that contain function definitions for convolution and pooling that are written
+in C and compiled into a shared library for performance reasons and makes these functions callable from Python."""
 import ctypes
 import os
 import platform
@@ -57,7 +57,7 @@ def make_argtypes_list(
 
 
 def make_callable(function: Callable, argtypes: list, restype: Optional[Union[list, Any]] = None) -> None:
-    """Supplies the c function with the parameters data types and return type to make it callable from python and
+    """Supplies the C function with the parameters data types and return type to make it callable from python and
     enable type checking."""
     function.argtypes = argtypes
     function.restype = restype
@@ -66,30 +66,29 @@ def make_callable(function: Callable, argtypes: list, restype: Optional[Union[li
 operating_system = platform.system()
 if operating_system == 'Windows':
     SHARED_LIB_FILE_EXTENSION = '.dll'
-elif operating_system == 'Linux':
+elif operating_system in ('Linux', 'Darwin'):
     SHARED_LIB_FILE_EXTENSION = '.so'
-elif operating_system == 'Darwin':
-    SHARED_LIB_FILE_EXTENSION = '.dylib'
 else:
     raise OSError(
-        f"Operating system unsupported ({operating_system}). Supported OSes are Windows, Linux and Mac (Darwin).")
+        f"Operating system unsupported ({operating_system}). Supported OSes are Windows, Linux and MacOS.")
 
 SHARED_LIB_PATH = os.path.join(os.path.dirname(__file__), 'lib', 'c_layers' + SHARED_LIB_FILE_EXTENSION)
 if not os.path.exists(SHARED_LIB_PATH):
     raise FileNotFoundError(
-        "The compiled shared/dynamic library doesn't exist, please build it following the instructions at"
+        "The compiled shared/dynamic library doesn't exist, please build it following the instructions at "
         "https://github.com/Yazan-Sharaya/xrnn?tab=readme-ov-file#building-from-source, "
         "or download a pre-built distribution (wheel).")
-# Python caches the imported module so the following module level code will only be executed once, therefor the dynamic
-# library is only loaded once.
-# If the operating system windows, use windll.LoadLibrary instead of CDLL or cdll.LoadLibrary because it uses stdcall,
-# and that's useful when passing too many arguments to c function by raising a TypeError, making it almost impossible
-# to pass the wrong number of arguments to the c functions. Using CDLL on Windows would allow passing too many arguments
-# but that's not the case for Linux and macOS.
+
+# Use windll.LoadLibrary on Windows instead of CDLL because it uses stdcall.
+# That's useful when passing too many arguments to a C function because it raises a TypeError, making it harder to
+# pass the wrong number of arguments to the C functions. Using CDLL on Windows would allow passing too many arguments.
+# However, that's not the case for Linux and macOS.
 if operating_system == 'Windows':
     functions_cdll = ctypes.windll.LoadLibrary(SHARED_LIB_PATH)
 else:
     functions_cdll = ctypes.CDLL(SHARED_LIB_PATH)
+# Python caches the imported module so the following module level code will only be executed once, therefor the shared
+# library is only loaded once.
 
 # Convolution forward operation that takes float inputs.
 convForwardF = functions_cdll.convForwardF
