@@ -9,6 +9,8 @@ import json
 import os
 import zipfile
 import tempfile
+import io
+import sys
 
 from xrnn import activations
 from xrnn import config
@@ -590,6 +592,10 @@ class Model:
     def load_params(self, path: Union[str, IO]) -> None:
         """Loads the model's parameters from disk. The model must be built before calling this method."""
         model_params = []
+        # This is needed for Python 3.6, since the `seek()` method wasn't implemented for `ZipExtFile` until 3.7.
+        # https://bugs.python.org/issue22908
+        if not isinstance(path, str) and sys.version_info[:2] == (3, 6):
+            path = io.BytesIO(path.read())
         with ops.load(path) as model_params_dict:
             layer_params = []
             for i, key in enumerate(model_params_dict):
