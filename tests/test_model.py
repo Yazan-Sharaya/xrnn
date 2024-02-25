@@ -3,10 +3,13 @@ import tempfile
 import zipfile
 import os
 import json
+import io
 
 if sys.version_info.minor > 6:
+    python_36 = False
     from contextlib import nullcontext
 else:
+    python_36 = True
     from contextlib import suppress as nullcontext
 from xrnn.data_handler import DataHandler
 from xrnn import layer_utils
@@ -465,6 +468,8 @@ class TestModel:
                     ]
                     # Test that the model's config was saved correctly.
                     assert model_config == cnn.get_config()
+                    if python_36:
+                        io.BytesIO(model_params_file.read())
                     loaded_params = ops.load(model_params_file)
                     assert len(loaded_params) == 8  # 2 for conv, 2 for dense, 4 for batch norm.
         finally:
