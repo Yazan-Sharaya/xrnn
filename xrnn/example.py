@@ -29,15 +29,17 @@ def check_mnist_integrity(path: str) -> bool:
 
 
 def load_mnist() -> np.ndarray:
-    """This function loads the mnist dataset if it's already downloaded, if not it downloads it from Google storage api
-    first."""
-    datasets_dir = os.path.join(os.path.dirname(__file__), 'datasets')
+    """
+    This function loads the mnist dataset if it's already downloaded, if not it downloads it from Google storage api
+    first. The installation path is at ~/.xrnn/datasets/mnist.npz (`~` is the user directory`).
+    """
+    datasets_dir = os.path.join(os.path.expanduser('~'), '.xrnn', 'datasets')
     mnist_path = os.path.join(datasets_dir, 'mnist.npz')
     if os.path.exists(mnist_path):
         if check_mnist_integrity(mnist_path):
             return np.load(mnist_path)
     if not os.path.isdir(datasets_dir):
-        os.mkdir(datasets_dir)
+        os.makedirs(datasets_dir)
     try:
         # This is directly stolen from https://github.com/keras-team/keras/blob/master/keras/datasets/mnist.py#L58.
         url = "https://storage.googleapis.com/tensorflow/tf-keras-datasets/mnist.npz"
