@@ -7,6 +7,7 @@ else:
 import importlib
 import platform
 import unittest.mock
+import ctypes
 
 import pytest
 
@@ -42,21 +43,20 @@ def test_c_functions_type_checking():
             3, 3, 1, 1, 32, 26, 26, 16, 28, 28, 3, True)
     # Test too many arguments.
     try:
-        with pytest.raises((RuntimeError, TypeError)):  # RuntimeError on macOS/Linux, TypeError on Windows.
-            # We wrap this with a try block because Linux might or might not raise an exception (RuntimeError), if it
-            # doesn't, pytest raises a RuntimeError, we catch that and call the function again testing that it doesn't
-            # raise any error.
-            c_layers.convForwardF(*args, 1)
-    except RuntimeError:
-        with nullcontext():
-            c_layers.convForwardF(*args, 1)
+        # We wrap this with a try block because Linux might or might not raise an exception (RuntimeError), if it does,
+        # we catch that and check if it's RuntimeError (Linux/macOS) or TypeError (windows).
+        c_layers.convForwardF(*args, 1)
+    except (RuntimeError, TypeError):
+        pass
+    except Exception as e:
+        assert False, f'Got an unexpected exception: {e}'
     # Test not enough arguments.
     with pytest.raises(TypeError):
         c_layers.convForwardF(*args[:-1])
     # Test wrong array dtype.
-    with pytest.raises(TypeError):
-        c_layers.convBackwardF(ops.ones(args[0].shape, 'f8'), *args[1:])
+    with pytest.raises(ctypes.ArgumentError):
+        c_layers.convForwardF(ops.ones(args[0].shape, 'f8'), *args[1:])
     # Test wrong number type
-    with pytest.raises(TypeError):
-        c_layers.convBackwardF(*args[:-2], 3.1, True)
+    with pytest.raises(ctypes.ArgumentError):
+        c_layers.convForwardF(*args[:-2], 3.1, True)
     c_layers.convForwardF(*args)
