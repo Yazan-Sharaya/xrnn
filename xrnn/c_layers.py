@@ -70,14 +70,15 @@ elif operating_system in ('Linux', 'Darwin'):
     SHARED_LIB_FILE_EXTENSION = '.so'
 else:
     raise OSError(
-        f"Operating system unsupported ({operating_system}). Supported OSes are Windows, Linux and MacOS.")
+        f"Supported OSes are Windows, Linux and MacOS. Got {operating_system}")
 
 SHARED_LIB_PATH = os.path.join(os.path.dirname(__file__), 'lib', 'c_layers' + SHARED_LIB_FILE_EXTENSION)
 if not os.path.exists(SHARED_LIB_PATH):
     raise FileNotFoundError(
-        "The compiled shared/dynamic library doesn't exist, please build it following the instructions at "
-        "https://github.com/Yazan-Sharaya/xrnn?tab=readme-ov-file#building-from-source, "
-        "or download a pre-built distribution (wheel).")
+        "The compiled shared/dynamic library doesn't exist, you are probably running source distribution code. "
+        "To build the package run `python -m build` and install the wheel using `pip install "
+        "dist/xrnn-REST-OF-THE-NAME.whl`. If you've already done this, you might be running your commands from the"
+        "source distribution directory, and Python will import that code instead of the installed one.")
 
 # Use windll.LoadLibrary on Windows instead of CDLL because it uses stdcall.
 # That's useful when passing too many arguments to a C function because it raises a TypeError, making it harder to
@@ -87,6 +88,7 @@ if operating_system == 'Windows':
     functions_cdll = ctypes.windll.LoadLibrary(SHARED_LIB_PATH)
 else:
     functions_cdll = ctypes.CDLL(SHARED_LIB_PATH)
+
 # Python caches the imported module so the following module level code will only be executed once, therefor the shared
 # library is only loaded once.
 
