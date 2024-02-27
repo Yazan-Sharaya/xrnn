@@ -1,7 +1,7 @@
 // Layers that accept double data type. For comments explaining parts of the code please refer to layers_f.c.
 #include <omp.h>
 #include <stdbool.h>
-#include <stdint.h>
+#include <stddef.h>
 
 #ifdef _WIN32
     #define EXPORT __declspec(dllexport)

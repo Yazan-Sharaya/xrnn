@@ -1,7 +1,7 @@
 // Layers that accept float data type.
 #include <omp.h>
 #include <stdbool.h>  // defines bool in C.
-#include <stdint.h>  // so size_t can be defined in legacy versions of C.
+#include <stddef.h>  // defines size_t
 
 #ifdef _WIN32
 	#define EXPORT __declspec(dllexport)  // This is only required on Windows and is used to make a function callable from outside the DLL.
