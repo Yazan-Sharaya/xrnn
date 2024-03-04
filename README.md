@@ -1,6 +1,10 @@
 EXtremely Rapid Neural Networks (xrnn)
 ======================================
+
 [![PyPI version](https://badge.fury.io/py/xrnn.svg)](https://badge.fury.io/py/xrnn)
+[![Python](https://img.shields.io/pypi/pyversions/xrnn)](https://badge.fury.io/py/xrnn)
+[![Build](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/build.yml/badge.svg)](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/build.yml)
+[![Tests](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/tests.yml/badge.svg)](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/tests.yml)
 
 Is a Python machine learning framework for building layers and neural networks
 by exposing an easy-to-use interface for building neural networks as a series of layers, similar to
@@ -29,18 +33,18 @@ The advantages of this package over existing machine learning frameworks
    building a network and straiting training takes less than a second (compared to `Tensorflow` for example which can take more than 10 seconds).
 5. High performance, even on weak hardware, reached 90% validation accuracy on MNIST dataset using a CNN on a 2 core 2.7 GHZ cpu (i7-7500U) in 20 seconds.
 6. Memory efficient, uses less RAM than Tensorflow _(~25% less)_ for a full CNN training/inference pipeline.
-7. Compatibility, there's no OS-specific code (OS and hardware independent), so the package can pretty much be built and run on any platform that has python >= 3.6 and any C/C++ compiler that has come out in the last 20 years.
+7. Compatibility, there's no OS-specific code (OS and hardware independent), so the package can pretty much be built and run on any platform that has python >= 3.6 and any C compiler that has come out in the last 20 years.
 
 
 Installation
 ------------
-Simply run the following command:
+Run the following command:
 ```
 pip install xrnn
 ```
 
-**Note** that the pre-built wheels are only provided for windows at the moment, if you want to install the package on other platforms,
-see [Building From Source](#building-from-source).
+* Pre-built distributions (wheels) are provided for pretty much every platform, so the installation should be quick and error-free.
+* The source distribution is also present if there isn't a wheel for the platform you are running on.
 
 
 Examples
@@ -119,32 +123,20 @@ the same interface as Keras, the only notable difference is that keras `model.fi
 
 Building From Source
 --------------------
-If you want to use the package on a platform that doesn't have a pre-built wheel (which is only available for windows atm), follow these steps:
+Running `python -m build` should suffice.
 
-1. clone the GitHub repository.
-2. navigate to the source tree where the .py and .cpp files reside.
-3. Open the terminal.
-4. Create a new folder called _**lib**_.
-5. Compile the source files via
-    ```
-    g++ -shared -o lib/c_layers layers_f.cpp layers_d.cpp -Ofast -fopenmp -fPIC
-    ```
-6. Navigate pack to the main directory (where pyproject.toml and setup.py reside).
-7. Run `python -m build -w`. If you don't have `build` installed, run `pip install build` before running the previous command.
-8. [Test your installation](#testing).
-9. Run `pip install dist/THE_WHEEL_NAME.whl`
+| Tested Platforms     | Tested Compilers                                     | Tested Architectures |
+|----------------------|------------------------------------------------------|----------------------|
+| Windows Server 2022  | **MSVC 2022**, MinGW(32/64) GCC 12.2.0, Clang 15.1.0 | 64/32 bit            | 
+| Linux (Ubuntu 20.04) | **GCC 13.1.0**, Clang 14.0.0²                        | 64/32 bit            |
+| MacOS (Intel + Arm)  | **Clang 15.0.0³**, GCC 13.2.0                        | 64 bit/ARM           |
+<sup>¹ The compiler used to build the package is in bold.</sup><br>
+<sup>² You might encounter `omp.h` file not found error, to fix this, install `libomp` using `sudo apt install libomp-dev`.</sup><br>
+<sup>³ You might encounter an error indicating that `omp.h` couldn't be found,
+to fix this, install `libomp` using Homebrew `brew install libomp`.</sup><br>
 
-And that's it! You can check the installation by running the following command `pip list` and checking to see of `xrnn` is in there.\
-You can ignore any warnings raised during the build process is long as it's successful. You can delete the cloned git repository if you wish to.
-
-**A note** for compiling on windows: If you want to compile the package on windows (for some reason since pre-built wheels are already provided)
-and you are using MSVC compiler, the C source files (layer_f and layers_d) must have the .cpp extension, so they are treated as C++ source files
-because for some reason, compiling them as C source files (happens when they have .c extension) with openmp support doesn't work, but renaming the
-files to have .cpp extension (so they are treated as C++ source files) magically solves the problem, even when the source code is unchanged.
-Anyway **_it's strongly recommended_** to use [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) on windows (which was used to build the Windows wheel) because it doesn't have this problem and results
-in a faster executable (~15% faster). So the whole reason for having the files as C++ source files is for compatibility with Microsoft's compiler,
-otherwise they would've been writen directly in C with no support when they are treated as C++ files (preprocessor directives and extern "C") because
-the code for the layers is written in C, so it can be called from Python using ctypes.
+To set the compiler you want to use for compilation, change the value of `compiler` under `[tool.xrnn]` in `pyproject.tmol`.\
+It can be a full path to the compiler executable or just the _shortcut (gcc for e.g.)_ if it's in your path.
 
 
 Testing
@@ -153,8 +145,21 @@ For testing the package, first you need to download `pytest` if you don't have i
 ```
 pip install pytest
 ```
-Then open the terminal/cmd in the parent directory and just type `pytest` and hit enter.\
-_If you installed `pytest` in a virtual environment, make sure to active it before running the command :)_
+Then run:
+```
+pytest PATH/TO/TESTS -p xrnn
+```
+**Note** That you need to install the package first if you [built it from source](#building-from-source)
+
+| Platform       | Test Python versions |
+|----------------|----------------------|
+| Windows 64 bit | CPython 3.6-3.13     |
+| Linux x86_64   | CPython 3.6-3.12     |
+| Intel MacOS    | CPython 3.6-3.12     |
+| Arm MacOS      | CPython 3.10-3.12    |
+| Windows 32 bit | CPython 3.10         |
+| Linux i386     | CPython 3.10         |
+| Arm Linux      | CPython 3.10         |
 
 
 Current Design Limitations
