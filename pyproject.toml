@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xrnn"
-version = "1.0.2"
+version = "1.1.0"
 authors = [{name = "Yazan Sharaya", email = "yazan.sharaya.yes@gmail.com"}]
 description = "Light weight fast machine learning framework."
 readme = "README.md"
@@ -22,11 +22,10 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Operating System :: Microsoft :: Windows",
-#    "Operating System :: MacOS",
-#    "Operating System :: POSIX",
-#    "Operating System :: Unix",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX",
+    "Operating System :: Unix",
     "Programming Language :: C",
-    "Programming Language :: C++",
     "Programming Language :: Python :: 3.6",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
@@ -56,5 +55,14 @@ license-files = ["LICENSE"]
 packages = ["xrnn"]
 
 [tool.setuptools.package-data]
-# Include the pre-compiled extension (shared/dynamic library)
-xrnn = ["lib/*"]
+xrnn = ["*.c"]
+
+[tool.xrnn]
+# The compiler you want to use when building the package from source. It can be an alias (gcc for e.g.) or full path to the compiler executable.
+# The default value (empty string) will use the default compiler on your system.
+compiler = ''
+
+[tool.cibuildwheel]
+build = "cp310-*"  # Only build on CPython 3.10
+test-command = "pytest {project}"
+test-requires = ["pytest"]
