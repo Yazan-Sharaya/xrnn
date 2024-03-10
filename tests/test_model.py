@@ -469,7 +469,7 @@ class TestModel:
                     # Test that the model's config was saved correctly.
                     assert model_config == cnn.get_config()
                     if python_36:
-                        io.BytesIO(model_params_file.read())
+                        model_params_file = io.BytesIO(model_params_file.read())
                     loaded_params = ops.load(model_params_file)
                     assert len(loaded_params) == 8  # 2 for conv, 2 for dense, 4 for batch norm.
         finally:
