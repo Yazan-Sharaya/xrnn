@@ -1,0 +1,80 @@
+name: Tests
+on:
+  workflow_run:
+    workflows: ["Build"]
+    types: [completed]
+
+jobs:
+  run_tests:
+    name: Test ${{ matrix.os }} wheels on Python ${{ matrix.python }}
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # macos-13 is an intel runner, macos-14 is apple silicon
+        os: [ubuntu-20.04, windows-2022, macos-13, macos-14]
+        python: ['3.6', '3.7', '3.8', '3.9', '3.10', '3.11', '3.12']
+        include:
+          - os: ubuntu-20.04
+            wheel_regex: "*manylinux*x86_64.whl"
+          - os: windows-2022
+            wheel_regex: "*amd64.whl"
+          - os: macos-13
+            wheel_regex: "*x86_64.whl"
+          - os: macos-14
+            wheel_regex: "*arm64.whl"
+          - with_coverage: true
+            os: ubuntu-20.04
+            python: '3.6'
+          - with_coverage: true
+            os: ubuntu-20.04
+            python: '3.10'
+        exclude:
+          # Setup Python v5 action only provides Python >= 3.10 on Apple Silicon.
+          - os: macos-14
+            python: '3.9'
+          - os: macos-14
+            python: '3.8'
+          - os: macos-14
+            python: '3.7'
+          - os: macos-14
+            python: '3.6'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade numpy pytest pytest-cov
+
+      - name: Download ${{ matrix.os }} wheels
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: build.yml
+          name: wheels-${{ matrix.os }}
+          path: ./wheelhouse/
+
+      - name: Install ${{ matrix.os }}-${{ matrix.wheel_regex }} wheel
+        shell: bash  # Need to explicitly set shell to bash on Windows.
+        run: python -m pip install "$(find ./wheelhouse/ -name ${{ matrix.wheel_regex }})"
+
+      - name: Test without coverage
+        if: "! matrix.with_coverage"
+        run: pytest -p xrnn
+
+      - name: Test with coverage
+        if: matrix.with_coverage
+        run: |
+          pip show xrnn | awk '/Location:/ {sub(/^Location: /, ""); print}' | xargs -I {} pytest -p xrnn --cov={}/xrnn --cov-report xml
+
+      - name: Upload coverage report to Codecov
+        if: matrix.with_coverage
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
