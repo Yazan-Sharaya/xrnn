@@ -5,6 +5,7 @@ EXtremely Rapid Neural Networks (xrnn)
 [![Python](https://img.shields.io/pypi/pyversions/xrnn)](https://badge.fury.io/py/xrnn)
 [![Build](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/build.yml/badge.svg)](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/build.yml)
 [![Tests](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/tests.yml/badge.svg)](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/Yazan-Sharaya/xrnn/graph/badge.svg)](https://codecov.io/gh/Yazan-Sharaya/xrnn)
 
 Is a Python machine learning framework for building layers and neural networks
 by exposing an easy-to-use interface for building neural networks as a series of layers, similar to
@@ -125,11 +126,12 @@ Building From Source
 --------------------
 Running `python -m build` should suffice.
 
-| Tested Platforms     | Tested Compilers                                     | Tested Architectures |
-|----------------------|------------------------------------------------------|----------------------|
-| Windows Server 2022  | **MSVC 2022**, MinGW(32/64) GCC 12.2.0, Clang 15.1.0 | 64/32 bit            | 
-| Linux (Ubuntu 20.04) | **GCC 13.1.0**, Clang 14.0.0²                        | 64/32 bit            |
-| MacOS (Intel + Arm)  | **Clang 15.0.0³**, GCC 13.2.0                        | 64 bit/ARM           |
+| Tested Platforms     | Tested Compilers             | Tested Architectures |
+|----------------------|------------------------------|----------------------|
+| Windows Server 2022  | **MSVC**, GCC (MinGW), Clang | 64/32 bit            | 
+| Linux (Ubuntu 20.04) | **GCC**, Clang²              | 64/32 bit            |
+| MacOS (Intel + Arm)  | **Clang**³, GCC              | 64 bit/ARM           |
+
 <sup>¹ The compiler used to build the package is in bold.</sup><br>
 <sup>² You might encounter `omp.h` file not found error, to fix this, install `libomp` using `sudo apt install libomp-dev`.</sup><br>
 <sup>³ You might encounter an error indicating that `omp.h` couldn't be found,
@@ -181,7 +183,7 @@ I might add the following features in the future:
 - Add more layer implementation, mainly recurrent, attention and other convolution (transpose, separable) layers.
 - Add support for multiple inputs/outputs to the layers and models.
 
-While keeping with the core vision of the project, which is to make as easy to install, compatible with all platforms and extendable as possible
+While keeping with the core vision of the project, which is to make it as easy to install, compatible with all platforms and extendable as possible
 
 License
 -------
