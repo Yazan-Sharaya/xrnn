@@ -1,0 +1,76 @@
+# When multiple events are specified using `on:`, only one of the events needs to occur to trigger the workflow.
+# The `publish` workflow should only run when both tests pass and a new release is created.
+# To achieve this functionality, we can only trigger the workflow when tests pass using `workflow_run`
+# then check if `ref` is a tag (refs/heads/v* for example).
+# However, this doesn't work because `workflow_run` doesn't save the original push ref that triggered the workflow.
+# So even if a tagged commit was what triggered the workflow this one depends on (test.yml), there is no way to check this.
+# As a workaround, a workflow called `ref.yml` is run on push that saves the ref name in a text file and uploads it.
+# The text file is downloaded in this workflow, the file content (ref name) is loaded and saved to an environment variable,
+# and if it's a tag, the `publish` job is run, otherwise, it would be skipped.
+name: Publish to PyPI
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+
+jobs:
+  check_if_release:
+    name: Check if the workflow has been triggered by a release
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Github Ref Name File
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: ref.yml
+          name: ref_name_file
+
+      - name: Set Ref Name as Environment Variable
+        run: |
+          REF_VALUE=$(<ref_name.txt)
+          echo "REF_NAME=$REF_VALUE" >> $GITHUB_ENV
+
+    # `env.REF_NAME` can't be used in an if statement (used in `skip_if_not_release` job) for some reason (even tho the docs mention it's allowed).
+    # However, `output` can be used, so this is another workaround to get this to work.
+    outputs:
+      REF_NAME: ${{ env.REF_NAME }}
+
+  skip_if_not_release:
+    if: startsWith(needs.check_if_release.outputs.REF_NAME, 'v')  # Run this job only when ref name is a tag.
+    runs-on: ubuntu-latest
+    needs: check_if_release
+    steps:  # Jobs must have `steps`.
+      - run: echo placeholder step
+
+  publish:
+    name: Publish package artifacts to PyPI
+    runs-on: ubuntu-latest
+    needs: skip_if_not_release  # If it's not a release, this job is skipped, and since `publish` depends on it, it will be skipped too.
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/xrnn
+    permissions:
+      id-token: write
+
+    steps:
+    - name: Download all the wheels
+      uses: dawidd6/action-download-artifact@v3
+      with:
+        workflow: "build.yml"
+        path: ./wheelhouse/
+
+    - name: Move wheels into ./dist
+      run: |
+        mkdir ./dist
+        find ./wheelhouse/ -type f -exec mv -t ./dist {} +
+
+    - name: Download the sdist
+      uses: dawidd6/action-download-artifact@v3
+      with:
+        workflow: "sdist.yml"
+        name: sdist
+        path: dist
+
+    - name: Publish wheels and sdist to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1

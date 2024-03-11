@@ -1,0 +1,14 @@
+# This workflow is used for an ugly workaround. If you are feeling adventurous, check out `publish.yml`.
+name: Save Commit Ref to file
+on: push
+
+jobs:
+  save_ref:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Save GitHub Ref Name to File
+        run: echo "${{ github.ref_name }}" > ref_name.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ref_name_file
+          path: ref_name.txt
