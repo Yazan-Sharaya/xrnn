@@ -1,0 +1,36 @@
+name: Build
+on: push
+
+jobs:
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # macos-13 is an intel runner, macos-14 is apple silicon
+        os: [ubuntu-20.04, windows-2022, macos-13, macos-14]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Homebrew libomp
+        if: startsWith(matrix.os, 'macos')
+        run: "brew install libomp"
+
+      - name: Set up QEMU  # Required to build arm64 builds on Linux via emulation.
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.16.5
+        env:
+          CIBW_ARCHS_LINUX: "auto aarch64"  # auto (x86_64, i386), aarch64 (arm64)
+          CIBW_TEST_SKIP: "*manylinux_x86_64 *amd64 *macosx*"  # We test these natively later with multiple Python versions, see `tests.yml`
+
+      - name: Upload ${{ matrix.os }} wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
