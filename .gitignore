@@ -1,10 +1,22 @@
-/xrnn/lib/
-/xrnn/__pycache__
-/xrnn/datasets/
-.idea
-dist
-build
-xrnn.egg-info
-wheel_builder.py
-__pycache__
-.pytest_cache
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+lib/
+*.egg-info/
+
+# Unit test / coverage reports
+.coverage
+coverage.xml
+.pytest_cache/
+
+docs/
+
+# PyCharm settings directory.
+.idea/
