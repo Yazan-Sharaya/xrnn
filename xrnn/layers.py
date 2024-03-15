@@ -897,9 +897,7 @@ class BatchNormalization(Layer):
         self.reduction_axis = []
         # Save these variables when the layer is in training mode because they are first calculated in the forward pass
         # and then used in the backward pass, so we save them to avoid recalculating them during the backward pass.
-        self.xmm = None  # inputs - mean
         self.stddev = None
-        self.variance = None
         self.moving_mean = None
         self.moving_var = None
         self.normalized_x = None
@@ -961,43 +959,29 @@ class BatchNormalization(Layer):
     def forward(self, inputs: ops.ndarray) -> ops.ndarray:
         if self.training:
             mean = inputs.mean(self.reduction_axis, keepdims=True)
-            variance = inputs.var(self.reduction_axis, keepdims=True) + config.EPSILON
-            # Need to add a small value to variance in case any of the inputs is too small, this is needed because we're
-            # taking the square root and power -3/2 of it, and very small values may lead to NAN in these calculations.
+            variance = inputs.var(self.reduction_axis, keepdims=True)
             self.moving_mean = self.calculate_moving_average(self.moving_mean, mean)
             self.moving_var = self.calculate_moving_average(self.moving_var, variance)
         else:
             mean = self.moving_mean
             variance = self.moving_var
-        xmm = inputs - mean
-        stddev = ops.sqrt(variance)
-        normalized = xmm / stddev
-        output = self.weights * normalized + self.biases
+        stddev = ops.sqrt(variance + config.EPSILON)
+        normalized = (inputs - mean) / stddev
         if self.training:
-            # Cache some of the calculations from the forward pass because these same calculations are used during the
-            # backward, so we don't need to recalculate them (small increase in memory consumption in trade of higher
-            # performance).
-            self.variance = variance
-            self.xmm = xmm
+            # Cache these calculation because they are used in the backward pass to save computational resources.
             self.stddev = stddev
             self.normalized_x = normalized
-        return output
+        return self.weights * normalized + self.biases
 
     def backward(self, d_values: ops.ndarray) -> ops.ndarray:
-        m = d_values.shape[0]  # Number of samples in each batch.
-        stddev_inv = 1 / self.stddev
-        xmm2 = 2 * self.xmm / m
-
+        n = d_values.shape[0]  # Number of samples in each batch.
         d_norm = d_values * self.weights
-        d_variance = ops.sum(
-            d_norm * self.xmm * -0.5 * ops.power(self.variance, -1.5), self.reduction_axis, keepdims=True)
-        d_mean = (ops.sum(d_norm * -stddev_inv, self.reduction_axis, keepdims=True) +
-                  d_variance * ops.sum(-xmm2, self.reduction_axis, keepdims=True))
-
         self.d_weights = ops.sum(d_values * self.normalized_x, self.reduction_axis, keepdims=True)
         self.d_biases = ops.sum(d_values, self.reduction_axis, keepdims=True)
         self.apply_l2_gradients()
-        return d_norm * stddev_inv + d_variance * xmm2 + d_mean / m
+        return (1 / n) * (1 / self.stddev) * (
+                n * d_norm - ops.sum(d_norm, self.reduction_axis, keepdims=True) -
+                self.normalized_x * ops.sum(d_norm * self.normalized_x, self.reduction_axis, keepdims=True))
 
     def get_params(self, copy: Optional[bool] = True, squeeze: Optional[bool] = False) -> List[ops.ndarray]:
         """
