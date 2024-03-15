@@ -194,9 +194,8 @@ def layer_memory_consumption(layer, input_shape: tuple = None, training: bool = 
             input_shape = padded_input_shape(
                 input_shape, calculate_padding_on_sides(input_shape, layer.window_size, layer.strides))
         intermediates_mem = ops.prod(input_shape) * ops.dtype(config.DTYPE).itemsize
-        intermediates_mem *= 2 if 'Dropout' in layer.name else 1
-        intermediates_mem *= 3 if 'BatchNormalization' in layer.name else 1
-    parameters_mem += layer.weights.nbytes * 3 if 'BatchNormalizatio' in layer.name and hasattr(layer, 'weights') else 0
+        intermediates_mem *= 2 if 'Dropout' in layer.name or 'BatchNormalization' in layer.name else 1
+    parameters_mem += layer.weights.nbytes * 2 if 'BatchNormalizatio' in layer.name and hasattr(layer, 'weights') else 0
     return parameters_mem, gradients_mem, intermediates_mem, parameters_mem + gradients_mem + intermediates_mem
 
 
