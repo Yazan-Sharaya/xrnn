@@ -1,13 +1,14 @@
-EXtremely Rapid Neural Networks (xrnn)
-======================================
+<div align="center">
+  <img src="https://github.com/Yazan-Sharaya/xrnn/assets/97323283/0b8afbd8-5cdd-4136-b897-4038ecc9c138" alt="xrnn logo">
+</div>
 
 [![PyPI version](https://badge.fury.io/py/xrnn.svg)](https://badge.fury.io/py/xrnn)
 [![Python](https://img.shields.io/pypi/pyversions/xrnn)](https://badge.fury.io/py/xrnn)
-[![Build](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/build.yml/badge.svg)](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/build.yml)
-[![Tests](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/tests.yml/badge.svg)](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/tests.yml)
+[![Build](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/build.yml/badge.svg?branch=)](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/build.yml)
+[![Tests](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/tests.yml/badge.svg?branch=)](https://github.com/Yazan-Sharaya/xrnn/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/Yazan-Sharaya/xrnn/graph/badge.svg)](https://codecov.io/gh/Yazan-Sharaya/xrnn)
 
-Is a Python machine learning framework for building layers and neural networks
+EXtremely Rapid Neural Networks (xrnn) is a Python machine learning framework for building layers and neural networks
 by exposing an easy-to-use interface for building neural networks as a series of layers, similar to
 [Keras](https://keras.io/getting_started/), while being as lightweight, fast, compatible and extendable as possible.
 
