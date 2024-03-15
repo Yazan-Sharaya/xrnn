@@ -49,7 +49,7 @@ def test_padded_output_shape(input_shape, window_size, strides, expected, image_
         (layers.MaxPooling2D(2, 1, 'same'), 0, 128 * 33 * 33 * 3 * 4),
         (layers.AvgPooling2D(2, 2), 0, image_batch_nbytes),
         (layers.AvgPooling2D(2, 2, 'same'), 0, 128 * 32 * 32 * 3 * 4),
-        (layers.BatchNormalization(), 60, image_batch_nbytes * 3),
+        (layers.BatchNormalization(), 48, image_batch_nbytes * 2),
         (layers.Flatten(), 0, image_batch_nbytes)
     ]
 )
