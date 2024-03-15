@@ -26,7 +26,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.16.5
         env:
-          CIBW_ARCHS_LINUX: "auto aarch64"  # auto (x86_64, i386), aarch64 (arm64)
+          CIBW_ARCHS_LINUX: ${{ (startsWith(github.ref_name, 'v') && 'auto aarch64') || 'x86_64' }}
           CIBW_TEST_SKIP: "*manylinux_x86_64 *amd64 *macosx*"  # We test these natively later with multiple Python versions, see `tests.yml`
 
       - name: Upload ${{ matrix.os }} wheels
