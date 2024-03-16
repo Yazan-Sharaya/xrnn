@@ -6,4 +6,4 @@
   the package to train a CNN on MNIST dataset, see `example.py`.
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"

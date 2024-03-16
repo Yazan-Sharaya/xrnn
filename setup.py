@@ -168,7 +168,7 @@ long_description = (this_directory / "README.md").read_text()
 
 setup(
     name="xrnn",
-    version="1.1.0",
+    version="1.1.1",
     author="Yazan Sharaya",  # This is done in one line in `pyproject.toml`: authors = [{name = "", email = ""}]
     author_email="yazan.sharaya.yes@gmail.com",
     description="Light weight fast machine learning framework.",

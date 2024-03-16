@@ -182,7 +182,7 @@ I might add the following features in the future:
 - Add Support for Cuda.
 - Optimize CPU performance to match the mature frameworks like Pytorch and Tensorflow.
 - Add support for automatic differentiation to make building custom layers easier.
-- Add more layer implementation, mainly recurrent, attention and other convolution (transpose, separable) layers.
+- Add more layers, mainly recurrent, attention and other convolution (transpose, separable) layers.
 - Add support for multiple inputs/outputs to the layers and models.
 
 While keeping with the core vision of the project, which is to make it as easy to install, compatible with all platforms and extendable as possible
