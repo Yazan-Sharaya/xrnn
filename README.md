@@ -154,15 +154,16 @@ pytest PATH/TO/TESTS -p xrnn
 ```
 **Note** That you need to install the package first if you [built it from source](#building-from-source)
 
-| Platform       | Test Python versions |
-|----------------|----------------------|
-| Windows 64 bit | CPython 3.6-3.13     |
-| Linux x86_64   | CPython 3.6-3.12     |
-| Intel MacOS    | CPython 3.6-3.12     |
-| Arm MacOS      | CPython 3.10-3.12    |
-| Windows 32 bit | CPython 3.10         |
-| Linux i386     | CPython 3.10         |
-| Arm Linux      | CPython 3.10         |
+| Platform       | Tested Python versions |
+|----------------|------------------------|
+| Windows 64 bit | 3.6 &nbsp; - 3.12      |
+| Linux x86_64   | 3.6 &nbsp; - 3.12      |
+| MacOS x86_64   | 3.6 &nbsp; - 3.12      |
+| MacOS arm64    | 3.10 - 3.12            |
+|                |                        |
+| Windows 32 bit | 3.10                   |
+| Linux i386     | 3.10                   |
+| Linux arm64    | 3.10                   |
 
 
 Current Design Limitations
